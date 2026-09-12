@@ -1,16 +1,17 @@
-﻿/**
- * Cognify Crypto Shield (V1)
+/**
+ * Cognify Client Storage Protection (V1)
  * 
- * Provides client-side and cross-environment cryptographic obfuscation and
- * AES-grade security for sensitive tokens, Gemini API keys, Groq API keys,
- * and user credentials stored in local browser persistence.
+ * Provides client-side storage obfuscation, integrity verification, and optional
+ * Web Crypto AES-GCM protection for user-provided BYOK (Bring-Your-Own-Key) tokens
+ * stored in browser localStorage.
  * 
- * Features:
- * 1. Reversible stream encryption with salt, hardware entropy, and integrity checksum.
- * 2. Web Crypto API AES-GCM fallback support.
- * 3. In-memory plain text cache for ultra-low-latency synchronous reads (secureLoadKeySync).
- * 4. Transparent migration for legacy plaintext keys stored in localStorage.
- * 5. Tamper detection: Corrupt or altered tokens safely fail without throwing.
+ * ARCHITECTURAL BOUNDARY:
+ * 1. Primary AI inference in production Cognify is executed server-side via `/api/gemini/chat`,
+ *    where API keys reside exclusively in server environment variables and are NEVER sent to the client.
+ * 2. This client shield protects optional developer keys entered in Settings (BYOK) against
+ *    plain-text shoulder-surfing and automated scraper memory inspection.
+ * 3. Sync operations use salted dynamic stream permutation with checksum verification.
+ * 4. Async operations leverage the standard browser Web Crypto API (AES-GCM 256-bit) when available.
  */
 
 const SHIELD_PREFIX = 'enc:v1:';
@@ -187,16 +188,100 @@ export function decryptSecretSync(cipherText: string): string {
 }
 
 /**
- * Async encryption wrapper (compatible with future AES-GCM extensions).
+ * Derives a CryptoKey for AES-GCM using PBKDF2 from MASTER_SEED and salt.
+ */
+async function deriveWebCryptoKey(salt: Uint8Array): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(MASTER_SEED),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt as any,
+      iterations: 10000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/**
+ * Encrypts a secret using standard Web Crypto API (AES-GCM 256-bit).
+ * Falls back to synchronous stream permutation in non-WebCrypto environments.
  */
 export async function encryptSecret(plainText: string): Promise<string> {
+  if (!plainText || typeof plainText !== 'string') return '';
+  if (isEncryptedSecret(plainText)) return plainText;
+
+  if (typeof crypto !== 'undefined' && crypto.subtle && crypto.getRandomValues) {
+    try {
+      const saltBytes = new Uint8Array(16);
+      crypto.getRandomValues(saltBytes);
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+
+      const key = await deriveWebCryptoKey(saltBytes);
+      const enc = new TextEncoder();
+      const cipherBuffer = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(plainText)
+      );
+
+      const saltHex = Array.from(saltBytes, b => b.toString(16).padStart(2, '0')).join('');
+      const ivHex = Array.from(iv, b => b.toString(16).padStart(2, '0')).join('');
+      const cipherHex = Array.from(new Uint8Array(cipherBuffer), b => b.toString(16).padStart(2, '0')).join('');
+
+      return `${SHIELD_PREFIX}aes:${saltHex}:${ivHex}:${cipherHex}`;
+    } catch {
+      // Fall back to synchronous stream obfuscation
+    }
+  }
+
   return encryptSecretSync(plainText);
 }
 
 /**
- * Async decryption wrapper.
+ * Decrypts a secret, automatically handling Web Crypto AES-GCM or synchronous stream formats.
  */
 export async function decryptSecret(cipherText: string): Promise<string> {
+  if (!cipherText || typeof cipherText !== 'string') return '';
+  if (!cipherText.startsWith(SHIELD_PREFIX)) return cipherText;
+
+  const parts = cipherText.split(':');
+  // Format: enc:v1:aes:<saltHex>:<ivHex>:<cipherHex>
+  if (parts.length >= 6 && parts[2] === 'aes' && typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const saltHex = parts[3];
+      const ivHex = parts[4];
+      const cipherHex = parts[5];
+
+      const saltBytes = new Uint8Array(saltHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
+      const iv = new Uint8Array(ivHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
+      const cipherBytes = new Uint8Array(cipherHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
+
+      const key = await deriveWebCryptoKey(saltBytes);
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        cipherBytes
+      );
+
+      return new TextDecoder().decode(decryptedBuffer);
+    } catch {
+      return '';
+    }
+  }
+
   return decryptSecretSync(cipherText);
 }
 

@@ -160,3 +160,16 @@ export async function deleteMemoryItem(
   const updatedList = currentList.filter((_, i) => i !== index);
   return updateStudentMemory(uid, { [category]: updatedList });
 }
+
+/**
+ * Resets all adaptive and confirmed memory lists back to empty.
+ */
+export async function clearStudentMemory(uid?: string | null): Promise<void> {
+  if (!uid) return;
+  return updateStudentMemory(uid, {
+    learningGoals: [],
+    knownPreferences: [],
+    explicitConfirmedInfo: [],
+    updatedAt: new Date().toISOString(),
+  });
+}

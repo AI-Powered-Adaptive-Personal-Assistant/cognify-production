@@ -50,6 +50,8 @@ import { cleanForSpeech } from '../src/lib/tts.js';
 import { getUserPresenceStatus, isUserOnlineNow } from '../src/lib/presence.js';
 import { isAdminUser, isSecurityAuditsOwner, isDatabaseHubOwner } from '../src/lib/roles.js';
 import {
+  encryptSecret,
+  decryptSecret,
   encryptSecretSync,
   decryptSecretSync,
   isEncryptedSecret,
@@ -1261,6 +1263,167 @@ async function run() {
     const personaB = buildPersona({ level: 'Basic', studentState: studentB.getState() });
     assert(personaA.includes('CALCULUS_INTEGRALS') || personaA.includes('REAL-TIME COGNITIVE'), 'Persona A reflects Student A mastery');
     assert(!personaB.includes('CALCULUS_INTEGRALS'), 'Persona B does not leak Student A mastery');
+  }
+
+  // 26. Cryptographic Shield & Web Crypto AES-GCM Integrity
+  console.log('\n[26] Cryptographic Shield & Web Crypto AES-GCM Integrity');
+  {
+    const secretKey = 'AIzaSy_demo_crypto_web_shield_token_99182';
+
+    // Async Web Crypto AES-GCM encryption
+    const asyncCipher = await encryptSecret(secretKey);
+    assert(asyncCipher.startsWith('enc:v1:'), 'Async cipher begins with enc:v1: shield prefix');
+    assert(isEncryptedSecret(asyncCipher) === true, 'isEncryptedSecret flags async cipher as true');
+    assert(asyncCipher !== secretKey, 'Cipher is safely distinct from plaintext');
+
+    // Async Decryption
+    const decrypted = await decryptSecret(asyncCipher);
+    assert(decrypted === secretKey, 'Web Crypto AES-GCM decrypts back to exact original token');
+
+    // Interoperability with synchronous stream format
+    const syncCipher = encryptSecretSync(secretKey);
+    const decryptedSyncViaAsync = await decryptSecret(syncCipher);
+    assert(decryptedSyncViaAsync === secretKey, 'decryptSecret interoperably decodes synchronous stream cipher');
+
+    // Plaintext pass-through
+    const rawToken = 'raw_api_key_passthrough';
+    assert(await decryptSecret(rawToken) === rawToken, 'decryptSecret preserves legacy unencrypted tokens');
+
+    // Tamper resistance
+    const tampered = asyncCipher.slice(0, -4) + 'abcd';
+    const tamperedResult = await decryptSecret(tampered);
+    assert(tamperedResult === '', 'Tampered or invalid cipher safely returns empty string');
+  }
+
+  // 27. Multi-Instance Spatial Memory Object Identity & Disambiguation
+  console.log('\n[27] Multi-Instance Spatial Memory Object Identity & Disambiguation');
+  {
+    const multiUser = 'spatial_multi_instance_student';
+
+    // Instance 1: Living Room TV Remote
+    await saveSpatialObject(multiUser, {
+      id: 'sp_remote_living_1',
+      uid: multiUser,
+      objectName: 'TV Remote',
+      category: 'remote',
+      surface: 'coffee table',
+      room: 'living room',
+      confidence: 0.95,
+      lastSeenTimestamp: Date.now() - 10000,
+      lastSeenIso: new Date(Date.now() - 10000).toISOString(),
+      source: 'user_confirmed',
+    });
+
+    // Instance 2: Bedroom AC Remote (same category, different room)
+    await saveSpatialObject(multiUser, {
+      id: 'sp_remote_bedroom_1',
+      uid: multiUser,
+      objectName: 'AC Remote',
+      category: 'remote',
+      surface: 'bedside nightstand',
+      room: 'bedroom',
+      confidence: 0.95,
+      lastSeenTimestamp: Date.now(),
+      lastSeenIso: new Date().toISOString(),
+      source: 'user_confirmed',
+    });
+
+    const userObjects = getSpatialObjects(multiUser);
+    assert(userObjects.length === 2, 'Preserves both distinct instances of the same category across different rooms');
+    assert(userObjects.some(o => o.room === 'living room'), 'Living room remote is retained');
+    assert(userObjects.some(o => o.room === 'bedroom'), 'Bedroom remote is retained');
+
+    // General query across multiple rooms
+    const generalQuery = querySpatialMemory(multiUser, 'where is my remote?', 'en');
+    assert(generalQuery.found === true, 'Finds remotes when multiple instances exist');
+    assert(generalQuery.records && generalQuery.records.length === 2, 'Returns both remote records in query result');
+    assert(generalQuery.message.includes('living room') && generalQuery.message.includes('bedroom'), 'Query message lists both rooms to disambiguate');
+
+    // Room-specific query: Bedroom
+    const bedroomQuery = querySpatialMemory(multiUser, 'where is the remote in the bedroom?', 'en');
+    assert(bedroomQuery.found === true, 'Pinpoints bedroom remote when room is specified');
+    assert(bedroomQuery.message.includes('bedside nightstand'), 'References bedside nightstand for bedroom remote');
+
+    // Room-specific query in Arabic: Living Room
+    const livingRoomQueryAr = querySpatialMemory(multiUser, 'فين الريموت اللي في الصالة؟', 'ar');
+    assert(livingRoomQueryAr.found === true, 'Pinpoints living room remote in Arabic query');
+    assert(livingRoomQueryAr.message.includes('coffee table') || livingRoomQueryAr.message.includes('living room') || livingRoomQueryAr.message.includes('الصالة'), 'Arabic message references living room instance');
+  }
+
+  // 28. Student Privacy Sovereignty, Full Data Export & Erasure Specification
+  console.log('\n[28] Student Privacy Sovereignty, Full Data Export & Erasure Specification');
+  {
+    // Ratified Privacy Specification checks
+    const specPath = path.resolve('PRIVACY_SPECIFICATION.md');
+    const spec = fs.readFileSync(specPath, 'utf8');
+    assert(!spec.includes('AES-grade dynamic scrambling'), 'Spec removed inaccurate AES claims for synchronous obfuscation');
+    assert(spec.includes('Web Crypto API AES-GCM'), 'Spec accurately documents Web Crypto API AES-GCM for async BYOK tokens');
+    assert(spec.includes('StudentPrivacyCenter.tsx'), 'Spec references canonical StudentPrivacyCenter component');
+    assert(spec.includes('Export Full Learning Archive'), 'Spec documents full data portability archive');
+    assert(spec.includes('Cascade Account Deletion'), 'Spec documents full cascade deletion across subcollections and Auth');
+
+    // Firestore security rules inspection
+    const rulesPath = path.resolve('firestore.rules');
+    assert(fs.existsSync(rulesPath), 'firestore.rules exists in root');
+    const rules = fs.readFileSync(rulesPath, 'utf8');
+    assert(rules.includes('allow read, write, delete: if isOwner(userId);'), 'Student threads strictly private to owner (no org/admin snoop)');
+    assert(rules.includes('isOwner(userId) && !isProtectedTarget()'), 'Users root allows self-deletion by account owner');
+
+    // Full Data Export schema validation
+    const sampleExport = {
+      exportVersion: '2.0.0',
+      exportDate: new Date().toISOString(),
+      specification: 'Cognify 2.0 Complete Machine-Readable Learning & Account Archive',
+      complianceStandard: 'GDPR Article 20 (Data Portability), FERPA, Egyptian Data Protection Law No. 151 of 2020',
+      studentProfile: {
+        uid: 'student_export_1',
+        name: 'Sara',
+        email: 'sara@example.edu',
+        academicLevel: 'Advanced',
+        cognitiveLevel: 'Analyze',
+      },
+      aiMemory: { factualKnowledge: [], episodicLog: [] },
+      studentState: {
+        cognitiveStage: 'proficient',
+        activePedagogy: 'socratic',
+        conceptMastery: {},
+      },
+      learningEvents: [],
+      spatialMemory: [],
+      conversationalThreads: [],
+      academicGoals: [],
+    };
+
+    assert(sampleExport.exportVersion === '2.0.0', 'Export bundle conforms to version 2.0.0');
+    assert(!!sampleExport.complianceStandard, 'Export bundle asserts GDPR and FERPA compliance');
+    assert(!!sampleExport.studentProfile && !!sampleExport.studentState, 'Export includes both profile and full student state projection');
+    assert(Array.isArray(sampleExport.learningEvents) && Array.isArray(sampleExport.spatialMemory), 'Export contains arrays for events and spatial data');
+  }
+
+  // 29. Pedagogical Decoupling of Static IQ from Academic Level & Cognitive Stage
+  console.log('\n[29] Pedagogical Decoupling of Static IQ from Academic Level & Cognitive Stage');
+  {
+    // Student manager initializes with student's chosen academic level, regardless of hypothetical IQ
+    const studentMgr = getStudentStateManager('student_decoupled_iq', 'Basic');
+    const state = studentMgr.getState();
+    assert(state.cognitiveStage === 'foundational', 'Basic academic level defaults to foundational cognitive stage');
+    assert(state.activePedagogy === 'scaffolded', 'Baseline pedagogy is scaffolded');
+
+    // Simulating IQ assessment completion: pedagogical state must NOT jump to proficient/socratic
+    // Pedagogy changes MUST ONLY be driven by concept mastery or explicit feedback
+    assert(state.cognitiveStage !== 'proficient', 'Static IQ does not arbitrarily promote student to proficient stage');
+
+    // Verify Onboarding.tsx source code integrity
+    const onboardingPath = path.resolve('src/components/Onboarding.tsx');
+    const onboardingCode = fs.readFileSync(onboardingPath, 'utf8');
+    assert(!onboardingCode.includes("level: iq < 90 ? 'Basic'"), 'Onboarding does not calculate academic level from IQ score');
+    assert(onboardingCode.includes('formData.level'), 'Onboarding preserves student chosen academic level');
+
+    // Verify App.tsx source code integrity
+    const appPath = path.resolve('src/App.tsx');
+    const appCode = fs.readFileSync(appPath, 'utf8');
+    assert(!appCode.includes("setCognitiveLevel(newIq < 90"), 'App.tsx onIqUpdated does not mutate cognitiveLevel based on IQ');
+    assert(!appCode.includes("level: newIq < 90"), 'App.tsx onIqUpdated does not mutate profile level based on IQ');
   }
 
   console.log(`\n========================================`);

@@ -5,8 +5,6 @@
 
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import Sidebar from "./components/Sidebar";
-import Onboarding from "./components/Onboarding";
-import Login from "./components/Login";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AccessibilityOverlay from "./components/AccessibilityOverlay";
 import LiveCaptions from "./components/LiveCaptions";
@@ -16,7 +14,7 @@ import { Message, UserProfile, AccessibilityMode, CognitiveLevel } from "./types
 import { auth, db, handleFirestoreError, OperationType, cleanDataForFirestore, clearPreLoginState, logout } from "./lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, setDoc, onSnapshot, getDocFromServer } from "firebase/firestore";
-import { Loader2, Settings, Layers, Menu, Moon, Sun, AlertCircle, RefreshCw, Mail, ArrowLeft, Globe, Check, Key } from "lucide-react";
+import { Loader2, Settings, Layers, Menu, Moon, Sun, AlertCircle, RefreshCw, Mail, ArrowLeft, Globe, Check, Key, Shield } from "lucide-react";
 import { toast, ToastContainer } from "./components/Toast";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 
@@ -24,7 +22,7 @@ import { isRTL, isArabicLocale, getTranslation, localize } from "./lib/translati
 import { canAccessSection } from "./lib/academics";
 import { canAccessView, homeViewFor, isAccessibilityUser, AppView } from "./lib/access";
 import { isAdminUser } from "./lib/roles";
-import { subscribeToStudentMemory } from "./lib/memory";
+import { subscribeToStudentMemory, clearStudentMemory } from "./lib/memory";
 import { StudentMemory, LanguagePreference } from "./types";
 import { initSecurityTracker } from "./lib/securityTracker";
 import { secureLoadKeySync, secureSaveKey, secureRemoveKey, autoMigrateStorageKeys } from "./lib/cryptoShield";
@@ -59,17 +57,22 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 // Heavy, route-specific views are code-split so they don't bloat the initial
 // bundle. They load on demand the first time a user opens that screen, which
 // keeps the app fast to start (important on mobile / slow connections).
+const VisionCompanionView = lazyWithRetry(() => import("./components/VisionCompanionView"));
+const MotorEuphoniaView = lazyWithRetry(() => import("./components/MotorEuphoniaView"));
+const DisabilityModeView = lazyWithRetry(() => import("./components/DisabilityModeView"));
+const Login = lazyWithRetry(() => import("./components/Login"));
+const Onboarding = lazyWithRetry(() => import("./components/Onboarding"));
 const ProfilePage = lazyWithRetry(() => import("./components/ProfilePage"));
 const SignVideoStudio = lazyWithRetry(() => import("./components/SignVideoStudio"));
 const AdminDashboard = lazyWithRetry(() => import("./components/AdminDashboard"));
 const SupportCenter = lazyWithRetry(() => import("./components/SupportCenter"));
-const DisabilityModeView = lazyWithRetry(() => import("./components/DisabilityModeView"));
 const GoalTracker = lazyWithRetry(() => import("./components/Goaltracker"));
 const GpaCalculator = lazyWithRetry(() => import("./components/GpaCalculator"));
 const StudentAnalytics = lazyWithRetry(() => import("./components/StudentAnalytics"));
 const AcademicPlanner = lazyWithRetry(() => import("./components/AcademicPlanner"));
 const LearningHub = lazyWithRetry(() => import("./components/learning/LearningHub"));
 const StudentMemoryPage = lazyWithRetry(() => import("./components/StudentMemoryPage"));
+const StudentPrivacyCenter = lazyWithRetry(() => import("./components/StudentPrivacyCenter"));
 const InstitutionCohortHub = lazyWithRetry(() => import("./components/InstitutionCohortHub"));
 const CognitiveGym = lazyWithRetry(() => import("./components/CognitiveGym"));
 const IqAssessmentModal = lazyWithRetry(() => import("./components/IqAssessmentModal"));
@@ -81,7 +84,7 @@ const ChatInterface = lazyWithRetry(() => import("./components/ChatInterface"));
 const VALID_VIEWS = [
   'chat', 'learning', 'profile', 'settings', 'video', 'disability',
   'admin', 'goals', 'gpa', 'analytics', 'planner', 'support', 'memory',
-  'institution', 'gym', 'iq', 'france',
+  'institution', 'gym', 'iq', 'france', 'privacy',
 ] as const;
 
 export default function App() {
@@ -748,6 +751,20 @@ export default function App() {
             }}
           />
         );
+      case 'privacy':
+        return (
+          <StudentPrivacyCenter
+            profile={activeProfile}
+            memory={memoryState}
+            onClearMemory={async () => {
+              if (profile?.uid) {
+                await clearStudentMemory(profile.uid);
+                setMemoryState(null);
+              }
+            }}
+            onClose={() => navigateTo(homeViewFor(profile))}
+          />
+        );
       case 'profile':
         return <ProfilePage profile={activeProfile} onMenuClick={() => setIsMobileMenuOpen(true)} onNavigateBack={() => navigateTo(homeViewFor(profile))} />;
       case 'admin':
@@ -993,12 +1010,34 @@ export default function App() {
                        className={`w-full py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
                          isDarkMode 
                            ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25' 
-                           : 'bg-slate-800 text-white hover:bg-slate-700'
+                           : 'bg-slate-800 border border-slate-700 text-slate-300 hover:text-white'
                        }`}
                      >
                        {isDarkMode 
-                         ? localize(profile.language, 'Enable Light Mode', 'تفعيل الوضع النهاري')
-                         : localize(profile.language, 'Enable Dark Mode', 'تفعيل الوضع الليلي')}
+                         ? localize(profile.language, '🌙 Dark Mode Active', '🌙 الوضع الليلي مفعل') 
+                         : localize(profile.language, '☀️ Light Mode Active', '☀️ الوضع النهاري مفعل')}
+                     </button>
+                   </div>
+
+                   {/* Privacy & Data Sovereignty Card */}
+                   <div className="p-6 bg-[#0A0C14]/80 rounded-3xl border border-slate-800/80 space-y-4 md:col-span-2">
+                     <div className="flex items-center gap-2 text-rose-400">
+                       <Shield className="w-5 h-5" />
+                       <h3 className="text-sm font-black uppercase tracking-widest">{localize(profile.language, 'Privacy & Data Sovereignty (GDPR / FERPA)', 'الخصوصية وسيادة البيانات')}</h3>
+                     </div>
+                     <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+                       {localize(
+                         profile.language,
+                         'Export your complete machine-readable learning archive, inspect provenance of stored facts, reset adaptive AI preferences, or permanently delete your account and all cloud data.',
+                         'تصدير أرشيفك التعليمي الشامل، فحص مصادر الحقائق المحفوظة، إعادة ضبط تفضيلات الذكاء الاصطناعي، أو حذف حسابك وكافة بياناتك السحابية نهائياً.'
+                       )}
+                     </p>
+                     <button
+                       onClick={() => navigateTo('privacy')}
+                       className="py-3 px-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 flex items-center justify-center gap-2 shadow-lg shadow-rose-500/10 active:scale-95"
+                     >
+                       <Shield className="w-4 h-4" />
+                       <span>{localize(profile.language, 'Manage Privacy, Export & Erasure', 'إدارة الخصوصية والتصدير والحذف')}</span>
                      </button>
                    </div>
                 </div>
@@ -1167,17 +1206,15 @@ export default function App() {
               isOpen={isIqModalOpen}
               onClose={() => setIsIqModalOpen(false)}
               profile={fullProfile || profile}
-              onIqUpdated={(newScore, domainScores, newLevel) => {
-                const computedLevel: CognitiveLevel =
-                  newLevel || (newScore < 90 ? 'Basic' : newScore >= 115 ? 'Advanced' : 'Intermediate');
+              onIqUpdated={(newScore, domainScores) => {
                 if (profile) {
                   setProfile({
                     ...profile,
                     iqScore: newScore,
                     cognitiveDomains: domainScores,
                     lastIqTestDate: new Date().toISOString(),
-                    level: computedLevel,
-                    cognitiveLevel: computedLevel,
+                    // Decoupled: Academic level and pedagogical stage are governed by
+                    // StudentStateManager concept mastery, not static IQ scores.
                   });
                 }
               }}

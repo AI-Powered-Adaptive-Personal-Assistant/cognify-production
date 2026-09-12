@@ -210,31 +210,32 @@ service cloud.firestore {
                           && (!isProtectedTarget() || isOwner(userId) || isSuperAdmin()))
                     );
       // Deletion policy:
-      //  - ONLY super admins can delete users. Regular admins can delete no one.
-      //  - Permanent members (super admins + permanent admins) can NEVER be
-      //    deleted — not even by another super admin.
-      allow delete: if isSuperAdmin() && !isProtectedTarget();
+      //  - The authenticated user can delete their own account (Right to Erasure / GDPR / Egyptian Law 151),
+      //    UNLESS they are a protected founder/permanent admin.
+      //  - Super admins can delete any non-protected user. Regular admins can delete no one.
+      //  - Permanent members (super admins + permanent admins) can NEVER be deleted.
+      allow delete: if (isOwner(userId) && !isProtectedTarget()) ||
+                       (isSuperAdmin() && !isProtectedTarget());
       
       // Explicit Learning Events Store rule for audit trails, event replay, and state projection
       match /learningEvents/{eventId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow write, delete: if isOwner(userId) || isAdmin();
       }
 
-      // Subcollections (threads, sandbox, goals, courses, attendance, planner,
-      // notes, ...): the owner has full access; admins can read everything but
+      // Private student chat threads are strictly private to the student owner.
+      // Administrators and organization managers CANNOT read a student's private AI conversations.
+      match /threads/{threadId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
+      // Subcollections (sandbox, goals, courses, attendance, planner,
+      // notes, ...): the owner has full access; admins can read academic progress but
       // may only WRITE to a non-protected user's data — a permanent member's
       // data can only be modified by themselves or a super admin.
-      // CRITICAL: the wildcard MUST start with a collection segment ({sub}).
-      // Under rules_version 2 a bare `match /{document=**}` matches ZERO or more
-      // segments, so it also matches /users/{userId} ITSELF — and because
-      // Firestore ORs all matching rules, `allow write: if isOwner(userId)`
-      // below would grant every user unrestricted write to their own profile,
-      // bypassing identityPreserved/adminFlagUnchanged/superFlagUnchanged and
-      // letting anyone self-grant isSuperAdmin. Requiring /{sub}/ keeps this
-      // rule on real subcollections only.
       match /{sub}/{document=**} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId)
+        allow write, delete: if isOwner(userId)
                      || (isAdmin() && (isSuperAdmin() || !isProtectedUser(userId)));
       }
     }

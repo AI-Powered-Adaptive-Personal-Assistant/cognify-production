@@ -21,6 +21,7 @@ import {
   ExerciseAnsweredPayload,
   FeedbackRecordedPayload,
   isGuestUser,
+  getLearningEventHistory,
 } from './learningEvents';
 
 export { isGuestUser };
@@ -214,10 +215,35 @@ export class StudentStateManager {
   }
 
   /**
-   * Hydrates state from Firestore with deep merging across multi-device sessions.
+   * Hydrates state from Firestore with deterministic event-sourced canonical projection.
+   * Prioritizes projecting from immutable LearningEvents to guarantee cross-device consistency.
    */
   private async hydrateFromFirestore(uid: string, level?: string) {
     try {
+      // 1. Attempt canonical event projection if events exist in event store
+      try {
+        const events = await getLearningEventHistory(uid, 200);
+        if (events && events.length > 0) {
+          const canonical = projectEventsToState(events, uid, level);
+          this.state = {
+            ...this.state,
+            ...canonical,
+            activePedagogy: this.state.activePedagogy || canonical.activePedagogy,
+            pedagogyEffectiveness: {
+              ...canonical.pedagogyEffectiveness,
+              ...this.state.pedagogyEffectiveness,
+            },
+          };
+          this.saveToLocalCache();
+          this.isLoaded = true;
+          this.notify();
+          return;
+        }
+      } catch (e) {
+        console.warn('[StudentStateManager] Event projection fallback to snapshot doc:', e);
+      }
+
+      // 2. Fall back to document snapshot
       const snap = await getDoc(studentStateDoc(uid));
       if (snap.exists()) {
         const remote = snap.data() as Partial<StudentState>;

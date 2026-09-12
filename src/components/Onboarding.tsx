@@ -182,8 +182,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const finishIqTest = (answers: Record<string, string>) => {
     const elapsed = iqStartTime ? Math.min(600, Math.round((Date.now() - iqStartTime) / 1000)) : (600 - iqTotalSecondsLeft);
     const result = calculateStandardizedIq(answers, elapsed);
-    const derivedLevel: CognitiveLevel =
-      result.iqScore < 90 ? 'Basic' : result.iqScore >= 115 ? 'Advanced' : 'Intermediate';
+    // Decouple academic level from IQ score: preserve existing level or default to Intermediate
+    const studentLevel: CognitiveLevel = formData.level || 'Intermediate';
 
     const record: IqAssessmentRecord = {
       id: `iq_onboard_${Date.now()}`,
@@ -197,7 +197,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
     setComputedIq({
       score: result.iqScore,
-      level: derivedLevel,
+      level: studentLevel,
       domains: result.domainScores,
       persona: result.recommendedPersona,
     });
@@ -206,7 +206,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       ...prev,
       iqScore: result.iqScore,
       cognitiveDomains: result.domainScores,
-      level: derivedLevel,
+      level: prev.level || 'Intermediate',
       lastIqTestDate: record.date,
       iqAssessmentHistory: [record],
     }));
@@ -961,9 +961,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         {/* Profile Card Summary */}
         <div className="w-full bg-surface-2 p-5 rounded-2xl border border-border/60 text-start space-y-3">
           <div className="flex items-center justify-between text-xs pb-2 border-b border-border/50">
-            <span className="text-text-muted font-medium">{isRtl ? 'المستوى المعرفي' : 'Cognitive Level'}</span>
-            <span className="font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{formData.level || 'Intermediate'} ({formData.iqScore || 100} IQ)</span>
+            <span className="text-text-muted font-medium">{isRtl ? 'المستوى الأكاديمي' : 'Academic Level'}</span>
+            <span className="font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{formData.level || 'Intermediate'}</span>
           </div>
+          {formData.iqScore ? (
+            <div className="flex items-center justify-between text-xs pb-2 border-b border-border/50">
+              <span className="text-text-muted font-medium">{isRtl ? 'تمرين الرشاقة الذهنية' : 'Mental Agility Baseline'}</span>
+              <span className="font-bold text-indigo-500 bg-indigo-500/10 px-2.5 py-0.5 rounded-full">{formData.iqScore} pts</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between text-xs pb-2 border-b border-border/50">
             <span className="text-text-muted font-medium">{isRtl ? 'المسار الأكاديمي / المهني' : 'Role & Path'}</span>
             <span className="font-bold text-text-main">{formData.role} · {formData.university || formData.work || 'Independent'}</span>

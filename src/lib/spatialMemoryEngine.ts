@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Spatial Memory Engine for Cognify 2.0
  * Provides persistent, multi-user isolated physical object tracking,
  * spatial extraction from vision descriptions, location history,
@@ -127,7 +127,7 @@ const SURFACE_DICTIONARY = [
 ];
 
 const ROOM_DICTIONARY = [
-  { roomEn: 'Living Room', roomAr: 'الصالة / غرفة المعيشة', roomFr: 'Salon', keywords: ['living room', 'lounge', 'sitting room', 'صالة', 'غرفة المعيشة', 'صالون', 'salon', 'salle de séjour'] },
+  { roomEn: 'Living Room', roomAr: 'الصالة / غرفة المعيشة', roomFr: 'Salon', keywords: ['living room', 'lounge', 'sitting room', 'صالة', 'الصالة', 'غرفة المعيشة', 'صالون', 'salon', 'salle de séjour'] },
   { roomEn: 'Bedroom', roomAr: 'غرفة النوم', roomFr: 'Chambre', keywords: ['bedroom', 'غرفة النوم', 'أوضة النوم', 'chambre', 'chambre à coucher'] },
   { roomEn: 'Kitchen', roomAr: 'المطبخ', roomFr: 'Cuisine', keywords: ['kitchen', 'مطبخ', 'المطبخ', 'cuisine'] },
   { roomEn: 'Office', roomAr: 'غرفة المكتب', roomFr: 'Bureau', keywords: ['office', 'study room', 'غرفة المكتب', 'مكتب عمل', 'bureau'] },
@@ -287,11 +287,32 @@ export function getSpatialObjects(uid: string): SpatialObjectRecord[] {
 export async function saveSpatialObject(uid: string, record: SpatialObjectRecord): Promise<void> {
   if (!uid || !record) return;
   record.uid = uid; // guarantee user ownership
+  record.objectName = record.objectName || (record as any).name || record.category || 'object';
 
   const current = getSpatialObjects(uid);
-  const existingIdx = current.findIndex(
-    (item) => item.category === record.category || item.objectName.toLowerCase() === record.objectName.toLowerCase()
-  );
+
+  // 1. Match by explicit unique instance ID first
+  let existingIdx = record.id ? current.findIndex((item) => item.id === record.id) : -1;
+
+  // 2. If no explicit ID match, match by category/name AND matching room
+  if (existingIdx === -1) {
+    existingIdx = current.findIndex((item) => {
+      const curName = (item.objectName || (item as any).name || item.category || '').toLowerCase();
+      const newName = (record.objectName || (record as any).name || record.category || '').toLowerCase();
+      const isSameCategory =
+        item.category === record.category ||
+        (curName && newName && curName === newName);
+      if (!isSameCategory) return false;
+
+      // If both items specify a room, only consider them the same instance if rooms match
+      if (item.room && record.room) {
+        return item.room.toLowerCase().trim() === record.room.toLowerCase().trim();
+      }
+
+      // If one or neither specifies a room, treat as the same instance
+      return true;
+    });
+  }
 
   let updated: SpatialObjectRecord[];
 
@@ -323,6 +344,11 @@ export async function saveSpatialObject(uid: string, record: SpatialObjectRecord
     updated = [...current];
     updated[existingIdx] = merged;
   } else {
+    // Generate distinct instance ID if not provided
+    if (!record.id) {
+      const roomSlug = record.room ? record.room.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'inst';
+      record.id = `sp_${record.category}_${roomSlug}_${Date.now().toString(36)}`;
+    }
     updated = [record, ...current];
   }
 
@@ -401,7 +427,7 @@ export function querySpatialMemory(
   uid: string,
   queryText: string,
   lang: 'en' | 'ar' | 'fr' = 'en'
-): { found: boolean; message: string; record?: SpatialObjectRecord } {
+): { found: boolean; message: string; record?: SpatialObjectRecord; records?: SpatialObjectRecord[] } {
   if (!uid || !queryText) {
     return {
       found: false,
@@ -417,26 +443,44 @@ export function querySpatialMemory(
   const lower = queryText.toLowerCase().trim();
   const objects = getSpatialObjects(uid);
 
-  // Match target object by name or dictionary keywords
-  let matchedRecord: SpatialObjectRecord | undefined;
+  // 1. Detect if a specific room was mentioned in the query
+  const targetRoom = ROOM_DICTIONARY.find((r) =>
+    r.keywords.some((kw) => lower.includes(kw.toLowerCase()))
+  );
+
+  // 2. Find all matching records for the query object
+  let matchingRecords: SpatialObjectRecord[] = [];
 
   for (const rec of objects) {
-    if (lower.includes(rec.objectName.toLowerCase())) {
-      matchedRecord = rec;
-      break;
+    const objName = (rec.objectName || (rec as any).name || rec.category || '').toLowerCase();
+    if (objName && lower.includes(objName)) {
+      matchingRecords.push(rec);
     }
   }
 
-  if (!matchedRecord) {
+  if (matchingRecords.length === 0) {
     for (const objDef of OBJECT_DICTIONARY) {
       if (objDef.keywords.some((kw) => lower.includes(kw.toLowerCase()))) {
-        matchedRecord = objects.find((o) => o.category === objDef.category);
-        if (matchedRecord) break;
+        const found = objects.filter((o) => o.category === objDef.category);
+        if (found.length > 0) {
+          matchingRecords = found;
+          break;
+        }
       }
     }
   }
 
-  if (!matchedRecord) {
+  // 3. If a room was specified, narrow down to records in that room
+  if (targetRoom && matchingRecords.length > 1) {
+    const roomMatches = matchingRecords.filter((rec) =>
+      rec.room && targetRoom.keywords.some((kw) => rec.room!.toLowerCase().includes(kw.toLowerCase()))
+    );
+    if (roomMatches.length > 0) {
+      matchingRecords = roomMatches;
+    }
+  }
+
+  if (matchingRecords.length === 0) {
     return {
       found: false,
       message:
@@ -447,6 +491,35 @@ export function querySpatialMemory(
           : "I haven't observed this object recently through the camera in your spatial memory.",
     };
   }
+
+  // 4. If multiple instances exist across different rooms, report all of them
+  if (matchingRecords.length > 1) {
+    let multiMessage = '';
+    if (lang === 'ar') {
+      multiMessage = `تم رصد ${matchingRecords.length} من "${matchingRecords[0].objectName}" في مواقع مختلفة:\n` +
+        matchingRecords
+          .map((r, i) => `${i + 1}. على ${r.surface || 'الترابيزة'}${r.room ? ` في ${r.room}` : ''} (${formatTimeElapsed(r.lastSeenTimestamp, 'ar')})`)
+          .join('\n');
+    } else if (lang === 'fr') {
+      multiMessage = `J'ai repéré ${matchingRecords.length} "${matchingRecords[0].objectName}" dans différents endroits :\n` +
+        matchingRecords
+          .map((r, i) => `${i + 1}. Sur ${r.surface || 'la table'}${r.room ? ` dans ${r.room}` : ''} (${formatTimeElapsed(r.lastSeenTimestamp, 'fr')})`)
+          .join('\n');
+    } else {
+      multiMessage = `Found ${matchingRecords.length} instances of "${matchingRecords[0].objectName}" across different locations:\n` +
+        matchingRecords
+          .map((r, i) => `${i + 1}. On the ${r.surface || 'table'}${r.room ? ` in the ${r.room}` : ''} (${formatTimeElapsed(r.lastSeenTimestamp, 'en')})`)
+          .join('\n');
+    }
+    return {
+      found: true,
+      message: multiMessage,
+      record: matchingRecords[0],
+      records: matchingRecords,
+    };
+  }
+
+  const matchedRecord = matchingRecords[0];
 
   const elapsed = formatTimeElapsed(matchedRecord.lastSeenTimestamp, lang);
   const pos = matchedRecord.relativePosition;
