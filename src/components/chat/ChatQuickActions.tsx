@@ -4,7 +4,7 @@ import {
   Layers, CheckSquare, BrainCircuit
 } from 'lucide-react';
 import { UserProfile } from '../../types';
-import { localize } from '../../lib/translations';
+import { localize, isArabicLocale } from '../../lib/translations';
 
 interface ChatQuickActionsProps {
   profile: UserProfile;
@@ -19,7 +19,7 @@ export default function ChatQuickActions({
   onQuickPrompt,
   disabled = false,
 }: ChatQuickActionsProps) {
-  const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(profile.language);
 
   const actions = [
     {

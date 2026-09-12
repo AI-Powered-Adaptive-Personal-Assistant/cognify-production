@@ -14,6 +14,7 @@ import ParentDashboard from './ParentDashboard';
 import {
   GraduationCap, Star, Flame, Trophy, ShieldCheck, ArrowLeft, Menu, Sparkles, HeartHandshake,
 } from 'lucide-react';
+import { isArabicLocale } from '../../lib/translations';
 
 interface LearningHubProps {
   profile: UserProfile | null;
@@ -32,7 +33,7 @@ const ALL_SUBJECTS: SubjectType[] = [
 ];
 
 export const LearningHub: React.FC<LearningHubProps> = ({ profile, onMenuClick, onNavigateBack }) => {
-  const isArabic = profile?.language === 'Arabic' || profile?.language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(profile?.language);
   const userId = profile?.uid || profile?.email || 'guest_child';
   const childName = profile?.name || (isArabic ? 'البطل' : 'Champion');
 

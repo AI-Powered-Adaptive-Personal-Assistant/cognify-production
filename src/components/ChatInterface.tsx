@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale, getTranslation } from '../lib/translations';
 import React, { useState, useRef, useEffect } from "react";
 import { Message, UserProfile, Task, PedagogyStyle } from "../types";
 import { generateAdaptiveResponseStream, generateBenchmarkComparison, generateProactiveInsights, generateChatTitle } from "../services/gemini";
@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { ref as firebaseStorageRef, uploadString, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType, cleanDataForFirestore } from "../lib/firebase";
-import { getTranslation } from "../lib/translations";
 import { toast } from "./Toast";
 import MarkdownMessage from "./MarkdownMessage";
 import { speak as speakText, cancelSpeech } from "../lib/tts";
@@ -160,7 +159,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
   // Dictation Language for STT: One-click toggle between French (France), English (US), and Arabic (Egypt)
   const [dictationLang, setDictationLang] = useState<'fr-FR' | 'en-US' | 'ar-EG'>(() => {
     if (profile.language === 'French') return 'fr-FR';
-    if (profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya') return 'ar-EG';
+    if (isArabicLocale(profile.language)) return 'ar-EG';
     return 'en-US';
   });
   const [showFrenchTravelAssistant, setShowFrenchTravelAssistant] = useState(false);
@@ -170,7 +169,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
     (studentState?.activePedagogy as any) || profile?.preferredPedagogyStyle || 'analogies'
   );
   const activePedagogyMeta = PEDAGOGY_STYLES.find(st => st.id === activePedagogyStyle) || PEDAGOGY_STYLES[0];
-  const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(profile.language);
 
   // Keep active pedagogy synchronized with real-time student state engine
   useEffect(() => {
@@ -378,7 +377,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
 
     setSpeakingMessageId(m.id);
     const messageId = m.id;
-    const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isAr = isArabicLocale(profile.language);
 
     // Previously this reimplemented voice selection inline and had no
     // silent-fail handling — a blind/Visual-mode user who can't see the reply
@@ -464,7 +463,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
       };
       recognition.lang = dictationLang || langMap[profile.language || 'English'] || 'en-US';
 
-      const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isAr = isArabicLocale(profile.language);
 
       recognition.onstart = () => setIsListening(true);
 
@@ -532,7 +531,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isAr = isArabicLocale(profile.language);
       toast.warning(
         isAr ? 'الإدخال الصوتي مش مدعوم في المتصفح ده. جرّب Chrome.' : 'Voice input isn’t supported in this browser. Try Chrome.',
         isAr ? 'غير مدعوم' : 'Unsupported',
@@ -546,7 +545,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
       setInterimTranscript("");
       try { recognitionRef.current?.stop(); } catch { /* ignore */ }
       if (finalFullText && profile.accessibilityMode === 'Visual') {
-        const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+        const isArabic = isArabicLocale(profile.language);
         const confirmMsg = isArabic ? "تم الإرسال: " + finalFullText : "Sent: " + finalFullText;
         speakText(confirmMsg, profile.language);
       }
@@ -588,7 +587,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
   // Sync with active thread by fetching from subcollection
   useEffect(() => {
     if (!profile.uid || !profile.activeThreadId) {
-      const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isArabic = isArabicLocale(profile.language);
       const welcomeMsg = isArabic 
         ? `كوجنيفي جاهز. كيف يمكنني مساعدتك في دراساتك في مجال ${profile.field} اليوم؟`
         : `Cognify Ready. How can I assist your ${profile.field} studies today?`;
@@ -628,7 +627,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
         setMessages(incomingMessages);
       } else {
         // If thread exists in metadata but no document, or no messages
-        const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+        const isArabic = isArabicLocale(profile.language);
         const welcomeMsg = isArabic 
           ? `كوجنيفي جاهز. كيف يمكنني مساعدتك في دراساتك في مجال ${profile.field} اليوم؟`
           : `Cognify Ready. How can I assist your ${profile.field} studies today?`;
@@ -670,7 +669,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
          return;
     }
 
-    const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isAr = isArabicLocale(profile.language);
     const newFiles: { name: string, type: string, data: string, url?: string, localId?: string }[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -922,7 +921,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
         }
       }
 
-      const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isAr = isArabicLocale(profile.language);
 
       // If files were sent but the answer came from the text-only fallback
       // provider, it couldn't actually see them — say so plainly.
@@ -1023,7 +1022,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
         return; // finally still runs (clears isLoading/streamingText)
       }
       console.error(error);
-      const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isArabic = isArabicLocale(profile.language);
       // Preserve the user's message. If the model already streamed some text,
       // KEEP it (just flag that it was cut off) instead of throwing it away.
       const errMsg: Message = {
@@ -1145,7 +1144,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
 
   const handleSelectSubject = (subject: StudySubject) => {
     setActiveSubjectId(subject.id);
-    const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isArabic = isArabicLocale(profile.language);
     const switchPrompt = isArabic
       ? `دعنا نركز الآن على مادة: "${subject.name}". ما هي المفاهيم الأساسية التي سنبدأ بمراجعتها اليوم؟`
       : `Let's focus now on the subject: "${subject.name}". What core concepts should we review today?`;
@@ -1153,7 +1152,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
   };
 
   const handleCiteSource = (source: ContextSource) => {
-    const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isArabic = isArabicLocale(profile.language);
     const citePrompt = isArabic
       ? `اشرح لي بالتفصيل أحدث الأبحاث والمعلومات المعتمدة من مصدر (${source.name}) حول موضوع دراستنا الحالي.`
       : `Explain in detail the latest verified findings and documentation from (${source.name}) related to our current study topic.`;
@@ -1469,7 +1468,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 className={`flex flex-col w-full group ${
-                  profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya'
+                  isArabicLocale(profile.language)
                     ? (m.role === 'user' ? 'items-start text-start' : 'items-end text-end')
                     : (m.role === 'user' ? 'items-end text-end' : 'items-start text-start')
                 }`}
@@ -1758,7 +1757,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
 
           {/* Starter prompts — shown on a fresh chat to beat the blank-page problem. */}
           {!isLoading && messages.filter((m) => m.role === 'user').length === 0 && (() => {
-            const ar = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+            const ar = isArabicLocale(profile.language);
             const f = profile.field || (ar ? 'مجالك' : 'your field');
             const chips = ar
               ? [

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Loader2, Edit3 } from 'lucide-react';
 import { Goal, GoalPriority, Milestone } from '../../types';
 import { deriveGoalMeta } from '../../lib/goals';
+import { isArabicLocale } from '../../lib/translations';
 import MilestoneList from './MilestoneList';
 
 interface EditGoalModalProps {
@@ -23,7 +24,7 @@ export default function EditGoalModal({ goal, onClose, onSave, language }: EditG
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const isArabic = language === 'Arabic' || language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(language);
 
   // Sync form when a goal is passed in
   useEffect(() => {

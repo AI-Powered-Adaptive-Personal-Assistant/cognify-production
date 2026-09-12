@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { UserProfile, Goal } from '../types';
@@ -8,6 +8,7 @@ import GoalCard from './goals/GoalCard';
 import AddGoalModal from './goals/AddGoalModal';
 import EditGoalModal from './goals/EditGoalModal';
 import { Plus, Target, Loader2, Menu, ArrowLeft } from 'lucide-react';
+import { toast } from './Toast';
 
 interface GoalTrackerProps {
   profile: UserProfile;
@@ -21,7 +22,7 @@ export default function GoalTracker({ profile, onMenuClick, onNavigateBack }: Go
   const [addOpen, setAddOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
-  const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(profile.language);
 
   // Real-time subscription to goals
   useEffect(() => {

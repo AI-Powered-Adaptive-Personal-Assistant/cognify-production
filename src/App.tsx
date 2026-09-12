@@ -5,7 +5,6 @@
 
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import Sidebar from "./components/Sidebar";
-import ChatInterface from "./components/ChatInterface";
 import Onboarding from "./components/Onboarding";
 import Login from "./components/Login";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -21,7 +20,7 @@ import { Loader2, Settings, Layers, Menu, Moon, Sun, AlertCircle, RefreshCw, Mai
 import { toast, ToastContainer } from "./components/Toast";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 
-import { isRTL, getTranslation, localize } from "./lib/translations";
+import { isRTL, isArabicLocale, getTranslation, localize } from "./lib/translations";
 import { canAccessSection } from "./lib/academics";
 import { canAccessView, homeViewFor, isAccessibilityUser, AppView } from "./lib/access";
 import { isAdminUser } from "./lib/roles";
@@ -75,6 +74,7 @@ const InstitutionCohortHub = lazyWithRetry(() => import("./components/Institutio
 const CognitiveGym = lazyWithRetry(() => import("./components/CognitiveGym"));
 const IqAssessmentModal = lazyWithRetry(() => import("./components/IqAssessmentModal"));
 const FrenchTravelVoiceAssistant = lazyWithRetry(() => import("./components/FrenchTravelVoiceAssistant"));
+const ChatInterface = lazyWithRetry(() => import("./components/ChatInterface"));
 
 /** Every hash route the app answers to — the single source of truth for both the
  *  initial read on mount and the popstate handler, so they can't drift apart. */
@@ -1155,7 +1155,7 @@ export default function App() {
         <AnimatePresence>
           {isLiveCaptionsOpen && (
             <LiveCaptions
-              language={(profile?.language === 'Arabic' || profile?.language === 'Egyptian Ammiya') ? 'ar-EG' : 'en-US'}
+              language={isArabicLocale(profile?.language) ? 'ar-EG' : 'en-US'}
               onClose={() => setIsLiveCaptionsOpen(false)} 
             />
           )}

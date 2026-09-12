@@ -2,6 +2,7 @@ import { UserProfile, Message } from "../types";
 import { toast } from "../components/Toast";
 import { auth } from "../lib/firebase";
 import { secureLoadKeySync } from "../lib/cryptoShield";
+import { isArabicLocale } from "../lib/translations";
 
 // SECURITY: provider keys are NEVER read in the browser any more.
 //
@@ -324,7 +325,7 @@ export async function generateBenchmarkComparison(
   userMessage: string,
   profile: UserProfile
 ): Promise<string> {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const prompt = `You are an evaluation assistant. Compare two answers to the same question and explain, briefly and concretely, how they differ in correctness, depth and clarity for a ${profile.level} ${profile.field} learner.
 
 Question / original answer:
@@ -388,7 +389,7 @@ export async function generateProactiveInsights(
   profile: UserProfile,
   recentMessages: Message[]
 ): Promise<string> {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const recent = recentMessages
     .filter((m) => m.content?.trim())
     .slice(-6)
@@ -516,7 +517,7 @@ export async function generateLogicResponse(
   moduleName: string,
   history: { role: 'user' | 'model', parts: { text: string }[] }[] = []
 ): Promise<string> {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
 
   // Direct (no-backend) path: Gemini → Groq. Used when there's no backend, and
   // as the fallback when a backend request fails.
@@ -786,7 +787,7 @@ ${otherThreadsSummary}
       yield* generateGroqStream(message, profile, history, groqKey, signal);
       return;
     }
-    const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isArabic = isArabicLocale(profile.language);
     const status = res?.status ?? lastStatus; // res is null here, so use the captured status
     if (status === 503) {
       toast.error(
@@ -881,7 +882,7 @@ export async function* generateAdaptiveResponseStream(
     if (apiKey) { yield* generateAdaptiveResponseStreamClient(message, profile, history, attachments, apiKey, signal); return; }
     const groqKey = groqPrimaryKey();
     if (groqKey) { yield* generateGroqStream(message, profile, history, groqKey, signal); return; }
-    const ar = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const ar = isArabicLocale(profile.language);
     yield { text: ar ? '⚠️ مفيش مفتاح ذكاء اصطناعي متفعّل.' : '⚠️ No AI key configured.', done: true, error: true };
     return;
   }
@@ -927,7 +928,7 @@ export async function* generateAdaptiveResponseStream(
         return;
       }
 
-      const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+      const isArabic = isArabicLocale(profile.language);
       const isFrench = profile.language === 'French' || (profile.language as any) === 'fr';
       
       if (!isMissingBackend) {
@@ -1030,7 +1031,7 @@ To experience Cognify's full-stack features, please use our fully integrated **C
   } catch (err: any) {
     // User pressed Stop (AbortController) — not a real error, don't toast.
     if (err?.name === 'AbortError') { yield { text: '', done: true }; return; }
-    const isArabic = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+    const isArabic = isArabicLocale(profile.language);
     toast.error(
       isArabic
         ? "تعذّر الاتصال بالخادم. تأكّد من اتصالك بالإنترنت وحاول مرة أخرى."
@@ -1048,7 +1049,7 @@ export async function generateAdaptiveResponse(
   attachments: { name: string, type: string, data: string }[] = [],
   studentState?: any
 ) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
 
   // Direct (no-backend) path: stream from Gemini/Groq and collect the full text.
   const direct = async (): Promise<string> => {

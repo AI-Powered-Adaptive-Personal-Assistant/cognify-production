@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Loader2, Target } from 'lucide-react';
 import { Goal, GoalPriority, Milestone } from '../../types';
 import { deriveGoalMeta } from '../../lib/goals';
+import { isArabicLocale } from '../../lib/translations';
 import MilestoneList from './MilestoneList';
 
 interface AddGoalModalProps {
@@ -24,7 +25,7 @@ export default function AddGoalModal({ open, onClose, onSave, language }: AddGoa
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const isArabic = language === 'Arabic' || language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(language);
 
   const handleClose = () => {
     setForm(EMPTY_FORM);

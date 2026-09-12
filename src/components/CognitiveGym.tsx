@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, CognitiveDomainScores } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { toast } from './Toast';
 import { getDailyGymWorkout, checkIqCooldownEligibility, GymChallenge } from '../lib/iqAssessment';
 import { updateDoc, doc, increment } from 'firebase/firestore';
@@ -8,24 +8,29 @@ import { db, cleanDataForFirestore, handleFirestoreError, OperationType } from '
 import { eventBus } from '../lib/learningEvents';
 import {
   Brain,
-  Flame,
-  Award,
   Zap,
-  CheckCircle,
+  Flame,
   Clock,
   Sparkles,
-  Lock,
-  ArrowRight,
-  Menu,
+  Trophy,
+  CheckCircle,
+  CheckCircle2,
+  AlertCircle,
   RotateCcw,
-  Target,
+  ArrowRight,
+  ShieldCheck,
+  Award,
+  ChevronRight,
+  Calendar,
+  Menu,
   ArrowLeft,
+  Target,
 } from 'lucide-react';
 
 interface CognitiveGymProps {
   profile: UserProfile;
   onMenuClick?: () => void;
-  onOpenIqModal: () => void;
+  onOpenIqModal?: () => void;
   onNavigateBack?: () => void;
 }
 
@@ -35,7 +40,7 @@ export default function CognitiveGym({
   onOpenIqModal,
   onNavigateBack,
 }: CognitiveGymProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const historyCount = profile.iqAssessmentHistory?.length || 0;
   const cooldownInfo = checkIqCooldownEligibility(historyCount, profile.lastIqTestDate);
 

@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { useState, useEffect, useRef } from "react";
 import { UserProfile } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -92,7 +92,7 @@ export default function SignVideoStudio({ profile, onMenuClick, isEmbedded, onNa
   };
   const recognitionLanguage = speechRecognitionLocale[voiceLang] || 'ar-EG';
 
-  const isArabic = voiceLang === 'Arabic' || voiceLang === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(voiceLang);
   const isEgyptian = voiceLang === 'Egyptian Ammiya';
   const isFrench = voiceLang === 'French';
   

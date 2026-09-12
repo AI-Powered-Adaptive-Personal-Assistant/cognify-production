@@ -34,9 +34,36 @@
 }
 
 @layer base {
+  html, body {
+    overflow-x: clip;
+    max-width: 100vw;
+  }
   body {
     @apply bg-bg-main text-text-main font-sans;
   }
+}
+
+/* Obsidian Glassmorphic Design System Tokens */
+.obsidian-card {
+  background-color: rgba(18, 21, 36, 0.85);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 1.5rem;
+}
+
+.obsidian-card-interactive {
+  background-color: rgba(18, 21, 36, 0.85);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 1.5rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.obsidian-card-interactive:hover {
+  border-color: rgba(100, 116, 139, 0.8);
+  transform: translateY(-1px);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

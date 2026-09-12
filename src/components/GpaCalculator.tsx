@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { useEffect, useMemo, useState } from 'react';
 import { UserProfile, Course } from '../types';
 import { Menu, Plus, Trash2, Calculator, Sparkles, GraduationCap, ArrowLeft } from 'lucide-react';
@@ -23,7 +23,7 @@ const gradeColor = (grade: string) => {
 };
 
 export default function GpaCalculator({ profile, onMenuClick, onNavigateBack }: GpaCalculatorProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const [courses, setCourses] = useState<Course[]>([]);
 
   // Add-course form

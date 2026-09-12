@@ -1,5 +1,6 @@
 import { Goal } from '../../types';
 import { isGoalOverdue } from '../../lib/goals';
+import { isArabicLocale } from '../../lib/translations';
 import { Target, CheckCircle2, Loader2 as InProgress, Circle, AlertTriangle } from 'lucide-react';
 
 interface GoalStatsProps {
@@ -8,7 +9,7 @@ interface GoalStatsProps {
 }
 
 export default function GoalStats({ goals, language }: GoalStatsProps) {
-  const isArabic = language === 'Arabic' || language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(language);
 
   const total     = goals.length;
   const completed = goals.filter((g) => g.status === 'completed').length;

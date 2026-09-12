@@ -28,7 +28,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { db, cleanDataForFirestore } from '../lib/firebase';
 import { UserProfile, VisionMemory, SpatialObjectRecord } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { generateAdaptiveResponse } from '../services/gemini';
 import { speak, cancelSpeech, unlockSpeechSynthesis } from '../lib/tts';
 import { toast } from './Toast';
@@ -46,7 +46,7 @@ interface VisionCompanionViewProps {
 
 type Status = 'idle' | 'starting-camera' | 'ready' | 'analyzing' | 'camera-denied' | 'unsupported';
 
-const isArabicLang = (lang?: string) => lang === 'Arabic' || lang === 'Egyptian Ammiya';
+const isArabicLang = (lang?: string) => isArabicLocale(lang);
 
 /**
  * Sanitizes visual descriptions for both on-screen display and spoken output:

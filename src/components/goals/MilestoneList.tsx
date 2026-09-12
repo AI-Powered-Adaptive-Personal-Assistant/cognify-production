@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Milestone } from '../../types';
+import { isArabicLocale } from '../../lib/translations';
 import { Plus, Trash2, CheckCircle2, Circle } from 'lucide-react';
 
 interface MilestoneListProps {
@@ -17,7 +18,7 @@ export default function MilestoneList({
   language,
 }: MilestoneListProps) {
   const [newTitle, setNewTitle] = useState('');
-  const isArabic = language === 'Arabic' || language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(language);
 
   const toggleMilestone = (id: string) => {
     onChange(

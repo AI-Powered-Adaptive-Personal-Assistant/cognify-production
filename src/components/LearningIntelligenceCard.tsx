@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserProfile, LearningIntelligenceProfile } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import {
   Brain,
   CheckCircle2,
@@ -20,7 +20,7 @@ interface LearningIntelligenceCardProps {
 
 export default function LearningIntelligenceCard({ profile }: LearningIntelligenceCardProps) {
   const { studentState, isLoaded } = useStudentState(profile.uid, profile.level);
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
 
   // Wait for authoritative state to load for authenticated users so they don't see a momentary flash of "0 progress"
   if (!isLoaded && profile.uid && profile.uid !== 'guest') {

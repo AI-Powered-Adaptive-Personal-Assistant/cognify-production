@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, StudentMemory } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { toast } from './Toast';
 import {
   updateStudentMemory,
@@ -13,19 +13,29 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
+  Sparkles,
   Plus,
   Trash2,
-  CheckCircle2,
+  Lock,
+  Eye,
+  EyeOff,
   RefreshCw,
-  Sparkles,
+  AlertCircle,
+  Clock,
   BookOpen,
-  Target,
-  UserCheck,
-  Globe,
-  Sliders,
-  AlertTriangle,
+  Heart,
+  Compass,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Info,
   Menu,
   ArrowLeft,
+  Globe,
+  Sliders,
+  Target,
+  UserCheck,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface StudentMemoryPageProps {
@@ -47,7 +57,7 @@ export default function StudentMemoryPage({
   onMenuClick,
   onNavigateBack,
 }: StudentMemoryPageProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const isMountedRef = useRef(true);
 
   useEffect(() => {

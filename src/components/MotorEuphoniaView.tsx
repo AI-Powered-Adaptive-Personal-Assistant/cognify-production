@@ -10,7 +10,7 @@ import { FacialHeadTracker, PointerPosition, FacialGestureState, DEFAULT_HEAD_TR
 import { speak, cancelSpeech, unlockSpeechSynthesis, hasArabicVoice } from '../lib/tts';
 import { geminiService } from '../services/geminiService';
 import { toast } from './Toast';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, cleanDataForFirestore } from '../lib/firebase';
 import {
@@ -273,7 +273,7 @@ const GAME_BUBBLES = [
 export default function MotorEuphoniaView({ profile, onSendMessage }: MotorEuphoniaViewProps) {
   const getInitialMotorLang = (): 'ar' | 'en' | 'fr' => {
     if (profile.language === 'French') return 'fr';
-    if (profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya') return 'ar';
+    if (isArabicLocale(profile.language)) return 'ar';
     return 'en';
   };
   const [motorLang, setMotorLang] = useState<'ar' | 'en' | 'fr'>(getInitialMotorLang);

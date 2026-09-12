@@ -19,6 +19,17 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       minify: 'esbuild',
       cssMinify: true,
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+            'vendor-motion': ['motion/react'],
+            'vendor-icons': ['lucide-react'],
+          },
+        },
+      },
     },
     esbuild: {
       drop: mode === 'production' ? ['console', 'debugger'] : [],

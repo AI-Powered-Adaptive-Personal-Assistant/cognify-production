@@ -34,7 +34,18 @@ export default function MarkdownMessage({ content }: { content: string }) {
           ul: ({ node, ...p }: any) => <ul className="list-disc ms-6 mb-4 space-y-1.5 marker:text-cyan-400 text-slate-200" {...p} />,
           ol: ({ node, ...p }: any) => <ol className="list-decimal ms-6 mb-4 space-y-1.5 marker:text-cyan-400 text-slate-200" {...p} />,
           li: ({ node, ...p }: any) => <li className="leading-relaxed" {...p} />,
-          a: ({ node, ...p }: any) => <a className="text-cyan-400 underline underline-offset-4 decoration-cyan-500/40 hover:text-cyan-300 transition-colors font-semibold" target="_blank" rel="noreferrer" {...p} />,
+          a: ({ node, href, ...p }: any) => {
+            const isSafe = href && !href.trim().toLowerCase().startsWith('javascript:') && !href.trim().toLowerCase().startsWith('data:');
+            return (
+              <a
+                className="text-cyan-400 underline underline-offset-4 decoration-cyan-500/40 hover:text-cyan-300 transition-colors font-semibold"
+                target="_blank"
+                rel="noopener noreferrer"
+                href={isSafe ? href : '#'}
+                {...p}
+              />
+            );
+          },
           strong: ({ node, ...p }: any) => <strong className="font-black text-white" {...p} />,
           em: ({ node, ...p }: any) => <em className="italic text-slate-300" {...p} />,
           hr: ({ node, ...p }: any) => <hr className="my-5 border-slate-800" {...p} />,

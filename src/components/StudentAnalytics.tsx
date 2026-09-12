@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { useEffect, useMemo, useState } from 'react';
 import { UserProfile, Course, AttendanceSubject, Goal, PlannerTask, CalendarEvent } from '../types';
 import { Menu, LayoutDashboard, GraduationCap, CalendarCheck, CalendarDays, Target, AlertTriangle, Clock, ArrowLeft } from 'lucide-react';
@@ -19,7 +19,7 @@ interface StudentAnalyticsProps {
 }
 
 export default function StudentAnalytics({ profile, onMenuClick, onNavigateBack }: StudentAnalyticsProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const t = (en: string, ar: string) => localize(profile.language, en, ar);
 
   const [courses, setCourses] = useState<Course[]>([]);

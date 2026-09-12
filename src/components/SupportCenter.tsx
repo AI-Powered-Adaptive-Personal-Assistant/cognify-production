@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { UserProfile } from '../types';
 import { Menu, LifeBuoy, ChevronDown, Mail, MessageSquare, Accessibility, Globe, Activity, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 
 interface SupportCenterProps {
   profile: UserProfile;
@@ -9,17 +9,16 @@ interface SupportCenterProps {
   onNavigateBack?: () => void;
 }
 
-// Support goes to the admin team (all of them).
+// Support goes to the core team.
 const SUPPORT_EMAILS = [
-  'marwaneltaweel0@gmail.com',
+  'pro.mahmoud.h@gmail.com',
   'its.alkhateeb@gmail.com',
   'esraahosni8@gmail.com',
-  'nermeenatefateffarouk@gmail.com',
 ];
 const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAILS.join(',')}`;
 
 export default function SupportCenter({ profile, onMenuClick, onNavigateBack }: SupportCenterProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const t = (en: string, ar: string) => localize(profile.language, en, ar);
   const [open, setOpen] = useState<number | null>(0);
 

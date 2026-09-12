@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from './Toast';
 import { UserProfile } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { speak, cancelSpeech } from '../lib/tts';
 import { Volume2, Mic, Square, Play, MessageSquare, UserCheck } from 'lucide-react';
 import SignAvatar3D from './SignAvatar3D';
@@ -13,7 +13,7 @@ interface HumanCommunicationBridgeProps {
 export default function HumanCommunicationBridge({ profile }: HumanCommunicationBridgeProps) {
   const [voiceDialect, setVoiceDialect] = useState<string>(profile.language || 'Egyptian Ammiya');
 
-  const isArabic = voiceDialect === 'Arabic' || voiceDialect === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(voiceDialect);
   const isEgyptian = voiceDialect === 'Egyptian Ammiya';
   const isFrench = voiceDialect === 'French';
 
@@ -74,7 +74,7 @@ export default function HumanCommunicationBridge({ profile }: HumanCommunication
       // device correctly warned about it. Tell the user what went wrong.
       onError: (reason) => {
         setIsSpeakingOut(false);
-        const isAr = voiceDialect === 'Arabic' || voiceDialect === 'Egyptian Ammiya';
+        const isAr = isArabicLocale(voiceDialect);
         const msg =
           reason === 'unsupported'
             ? (isAr ? '⚠️ المتصفح لا يدعم النطق الصوتي' : '⚠️ This browser does not support speech output')

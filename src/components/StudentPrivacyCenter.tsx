@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Shield, Download, Trash2, CheckCircle2, AlertTriangle, Database, Info, FileText } from 'lucide-react';
 import { UserProfile, StudentMemory } from '../types';
 import { StudentState } from '../lib/studentStateEngine';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 
 interface StudentPrivacyCenterProps {
   profile: UserProfile;
@@ -23,7 +23,7 @@ export default function StudentPrivacyCenter({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [clearedSuccess, setClearedSuccess] = useState(false);
 
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const L = (en: string, ar: string) => localize(profile.language, en, ar);
 
   const handleExportData = () => {

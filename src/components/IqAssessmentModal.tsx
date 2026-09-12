@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, CognitiveDomainScores, IqAssessmentRecord, CognitiveLevel } from '../types';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { toast } from './Toast';
 import { eventBus } from '../lib/learningEvents';
 import {
@@ -9,29 +9,33 @@ import {
   checkIqCooldownEligibility,
   IqQuestion,
 } from '../lib/iqAssessment';
-import { updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db, cleanDataForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   Brain,
-  Clock,
+  Timer,
   CheckCircle,
+  CheckCircle2,
   AlertCircle,
+  Sparkles,
+  ArrowRight,
+  RotateCcw,
+  X,
   Lock,
+  ChevronRight,
   Award,
   Zap,
-  ChevronRight,
-  X,
-  Sparkles,
-  BarChart3,
+  ShieldAlert,
+  Clock,
   Layers,
-  HelpCircle,
+  BarChart3,
 } from 'lucide-react';
 
 interface IqAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: UserProfile;
-  onIqUpdated: (newScore: number, domainScores: CognitiveDomainScores, newLevel?: CognitiveLevel) => void;
+  onIqUpdated?: (newScore: number, domainScores: CognitiveDomainScores, newLevel?: CognitiveLevel) => void;
 }
 
 export default function IqAssessmentModal({
@@ -40,7 +44,7 @@ export default function IqAssessmentModal({
   profile,
   onIqUpdated,
 }: IqAssessmentModalProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
   const historyCount = profile.iqAssessmentHistory?.length || 0;
   const cooldownInfo = checkIqCooldownEligibility(historyCount, profile.lastIqTestDate);
 

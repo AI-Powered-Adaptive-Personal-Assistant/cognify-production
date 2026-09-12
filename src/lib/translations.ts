@@ -769,8 +769,16 @@ export const getTranslation = (lang: string | undefined, key: TranslationKey): s
   return translations[language]?.[key] || translations['English']?.[key] || key;
 };
 
-export const isRTL = (lang: string | undefined): boolean => {
+/**
+ * Canonical helper to check if a language setting is an Arabic dialect.
+ * Single source of truth across all components and services.
+ */
+export const isArabicLocale = (lang: string | undefined | null): boolean => {
   return lang === 'Arabic' || lang === 'Egyptian Ammiya';
+};
+
+export const isRTL = (lang: string | undefined): boolean => {
+  return isArabicLocale(lang);
 };
 
 // ── Inline-string localization (English-keyed) ───────────────────────────────

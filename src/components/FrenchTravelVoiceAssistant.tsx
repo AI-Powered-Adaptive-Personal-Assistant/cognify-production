@@ -25,7 +25,7 @@ import {
   Info
 } from 'lucide-react';
 import { speak as speakText, cancelSpeech, hasFrenchVoice } from '../lib/tts';
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import { UserProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 
@@ -368,7 +368,7 @@ export default function FrenchTravelVoiceAssistant({
   onMenuClick,
   isEmbedded = false
 }: FrenchTravelVoiceAssistantProps) {
-  const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+  const isAr = isArabicLocale(profile.language);
 
   // Tabs: 'interpreter' | 'phrasebook' | 'emergency'
   const [activeTab, setActiveTab] = useState<'interpreter' | 'phrasebook' | 'emergency'>('interpreter');

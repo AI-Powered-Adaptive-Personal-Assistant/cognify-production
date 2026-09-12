@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Goal } from '../../types';
 import { isGoalOverdue, deriveGoalMeta, updateGoal, parseGoalLocalDate } from '../../lib/goals';
+import { isArabicLocale } from '../../lib/translations';
 import MilestoneList from './MilestoneList';
 import {
   ChevronDown,
@@ -39,7 +40,7 @@ export default function GoalCard({ goal, uid, onEdit, onDelete, language }: Goal
   const [expanded, setExpanded] = useState(false);
   const [localGoal, setLocalGoal] = useState<Goal>(goal);
   const overdue = isGoalOverdue(localGoal);
-  const isArabic = language === 'Arabic' || language === 'Egyptian Ammiya';
+  const isArabic = isArabicLocale(language);
 
   // Sync local state when the PARENT passes a changed goal
   useEffect(() => {

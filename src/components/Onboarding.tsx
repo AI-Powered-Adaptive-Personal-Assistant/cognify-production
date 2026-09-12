@@ -1,4 +1,4 @@
-import { localize } from '../lib/translations';
+import { localize, isArabicLocale } from '../lib/translations';
 import React, { useState, useEffect, useRef } from "react";
 import { UserProfile, UserRole, EducationLevel, CognitiveDomainScores, IqAssessmentRecord, CognitiveLevel } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -943,7 +943,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   const renderReadyStep = () => {
-    const isRtl = formData.language === 'Arabic' || formData.language === 'Egyptian Ammiya';
+    const isRtl = isArabicLocale(formData.language);
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
