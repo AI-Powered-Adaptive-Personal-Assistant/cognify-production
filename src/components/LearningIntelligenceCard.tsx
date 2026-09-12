@@ -19,8 +19,34 @@ interface LearningIntelligenceCardProps {
 }
 
 export default function LearningIntelligenceCard({ profile }: LearningIntelligenceCardProps) {
-  const { studentState } = useStudentState(profile.uid, profile.level);
+  const { studentState, isLoaded } = useStudentState(profile.uid, profile.level);
   const isAr = profile.language === 'Arabic' || profile.language === 'Egyptian Ammiya';
+
+  // Wait for authoritative state to load for authenticated users so they don't see a momentary flash of "0 progress"
+  if (!isLoaded && profile.uid && profile.uid !== 'guest') {
+    return (
+      <div
+        className="p-6 md:p-7 rounded-3xl bg-[#121524]/90 border border-slate-800/80 shadow-2xl backdrop-blur-xl space-y-5 animate-pulse"
+        aria-busy="true"
+        aria-label={localize(profile.language, 'Loading learning intelligence profile', 'جاري تحميل الملف المعرفي الذكي')}
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-slate-800/80" />
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-1/3 rounded-lg bg-slate-800/80" />
+            <div className="h-3 w-1/4 rounded-lg bg-slate-800/50" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="h-16 rounded-2xl bg-slate-800/50" />
+          <div className="h-16 rounded-2xl bg-slate-800/50" />
+          <div className="h-16 rounded-2xl bg-slate-800/50" />
+          <div className="h-16 rounded-2xl bg-slate-800/50" />
+        </div>
+        <div className="h-20 w-full rounded-2xl bg-slate-800/40" />
+      </div>
+    );
+  }
 
   const masteryEntries = Object.entries(studentState.conceptMastery || {});
   const hasLiveMastery = masteryEntries.length > 0;

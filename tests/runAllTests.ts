@@ -12,7 +12,7 @@ import { calculateNextReview, createInitialRetentionSchedule } from '../src/lib/
 import { resolveCognitiveStage, guard, buildPersona, buildContents } from '../api/_lib/ai.js';
 import { verifyRequestAuth, setTestCertProvider, getExpectedProjectId } from '../api/_lib/authGuard.js';
 import { eventBus } from '../src/lib/learningEvents.js';
-import { getStudentStateManager } from '../src/lib/studentStateEngine.js';
+import { getStudentStateManager, createInitialStudentState, isGuestUser, studentStateDoc } from '../src/lib/studentStateEngine.js';
 import { classifyRequest } from '../api/_lib/router.js';
 import {
   extractSpatialObjectsFromVision,
@@ -972,6 +972,49 @@ async function run() {
     assert(inlineParts[0]?.inlineData?.mimeType === 'application/pdf', 'First attachment has application/pdf MIME type');
     assert(inlineParts[0]?.inlineData?.data === dummyBase64, 'Stripped data URL prefix leaving clean base64 data');
     assert(inlineParts[1]?.inlineData?.mimeType === 'image/jpeg', 'Second attachment has image/jpeg MIME type');
+  }
+
+  // 21. Unified Student State Engine & Firestore Persistence
+  console.log('\n[21] Unified Student State Engine & Firestore Persistence');
+  {
+    // Initial student state baseline
+    const initial = createInitialStudentState('test_student_1', 'Intermediate');
+    assert(initial.uid === 'test_student_1', 'Initial student state preserves UID');
+    assert(initial.activePedagogy === 'scaffolded', 'Default initial pedagogy is scaffolded');
+    assert(initial.struggleSignal === 0.2, 'Initial baseline struggle signal is 0.2');
+    assert(initial.totalExercisesCompleted === 0, 'Initial exercise count is 0');
+
+    // Guest detection safety
+    assert(isGuestUser(null), 'isGuestUser handles null');
+    assert(isGuestUser(undefined), 'isGuestUser handles undefined');
+    assert(isGuestUser('guest'), 'isGuestUser recognizes guest');
+    assert(isGuestUser('anonymous'), 'isGuestUser recognizes anonymous');
+    assert(isGuestUser('demo'), 'isGuestUser recognizes demo');
+    assert(!isGuestUser('user_482910'), 'isGuestUser recognizes real authenticated UID');
+
+    // Guest manager initialization bypasses network calls and marks loaded immediately
+    const guestManager = getStudentStateManager('guest');
+    assert(guestManager.loaded === true, 'Guest manager loaded is true immediately');
+    assert(guestManager.getState().uid === 'guest', 'Guest manager maintains guest state');
+
+    // Closed-loop answer tracking
+    const result1 = guestManager.recordAnswer('fractions_addition', true, 3500);
+    assert(result1.state.conceptMastery.fractions_addition.attempts === 1, 'Records first attempt count');
+    assert(result1.state.conceptMastery.fractions_addition.correct === 1, 'Records first correct count');
+    assert(result1.state.conceptMastery.fractions_addition.accuracy === 1.0, 'Calculates 100% accuracy');
+    assert(result1.state.conceptMastery.fractions_addition.confidence > 0.5, 'Increases confidence on success');
+
+    // Latency and repeated error detection
+    const resultStruggle = guestManager.recordAnswer('calculus_limits', false, 19000, 'sign_flip');
+    assert(resultStruggle.state.learningStrain.signals.includes('high_response_latency'), 'Detects high response latency struggle signal');
+
+    const resultRepeatErr = guestManager.recordAnswer('calculus_limits', false, 4000, 'sign_flip');
+    assert(resultRepeatErr.state.conceptMastery.calculus_limits.consecutiveIncorrect >= 2, 'Tracks consecutive incorrect answers');
+    assert(resultRepeatErr.state.learningStrain.signals.includes('repeated_errors'), 'Detects repeated errors struggle signal');
+
+    // Flush safety
+    await guestManager.flushPendingWrites();
+    assert(true, 'flushPendingWrites executes safely without throwing on guest sessions');
   }
 
   console.log(`\n========================================`);

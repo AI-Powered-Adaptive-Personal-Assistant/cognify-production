@@ -5,6 +5,8 @@
  * active interventions, and spaced retention schedules.
  */
 
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db, cleanDataForFirestore } from './firebase';
 import { CognitiveStage, resolveCognitiveStage } from '../../api/_lib/ai';
 import { diagnosePrerequisiteGap, PrerequisiteDiagnosis } from './conceptGraph';
 import { decideIntervention, InterventionDirective } from './interventionEngine';
@@ -14,6 +16,20 @@ import {
   calculateNextReview,
 } from './spacedRetention';
 import { eventBus, LearningEvent, ExerciseAnsweredPayload } from './learningEvents';
+
+/**
+ * Checks whether a user ID represents an unauthenticated guest or demo session.
+ * Guest users bypass remote Firestore network calls completely.
+ */
+export function isGuestUser(uid?: string | null): boolean {
+  return !uid || uid === 'guest' || uid === 'anonymous' || uid === 'demo';
+}
+
+/**
+ * Canonical Firestore document path for student state.
+ * Structured under users/{uid}/studentState/current subcollection.
+ */
+export const studentStateDoc = (uid: string) => doc(db, 'users', uid, 'studentState', 'current');
 
 export interface ConceptMasteryRecord {
   conceptId: string;
@@ -79,14 +95,44 @@ export class StudentStateManager {
   private state: StudentState;
   private changeListeners: Set<(state: StudentState) => void> = new Set();
   private unsubscribeEventBus?: () => void;
+  private isLoaded: boolean = false;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingConcepts: Set<string> = new Set();
+  private hasPendingWrites: boolean = false;
+  private beforeUnloadHandler?: () => void;
 
   constructor(uid: string, level?: string) {
-    this.state = this.loadFromStorage(uid) || createInitialStudentState(uid, level);
+    // 1) Fast paint from local device cache
+    this.state = this.loadFromLocalCache(uid) || createInitialStudentState(uid, level);
     this.initEventListeners();
+
+    // 2) Unauthenticated or guest sessions skip remote Firestore hydration entirely
+    if (isGuestUser(uid)) {
+      this.isLoaded = true;
+    } else {
+      this.hydrateFromFirestore(uid, level);
+    }
+
+    // 3) Bind browser window beforeunload to flush any pending debounced writes
+    if (typeof window !== 'undefined') {
+      this.beforeUnloadHandler = () => {
+        this.flushPendingWrites();
+      };
+      window.addEventListener('beforeunload', this.beforeUnloadHandler);
+    }
   }
 
   public getState(): StudentState {
     return { ...this.state };
+  }
+
+  /** True once authoritative state has loaded (instant for guests, post-hydration for auth users) */
+  public get loaded(): boolean {
+    return this.isLoaded;
+  }
+
+  public get isHydrated(): boolean {
+    return this.isLoaded;
   }
 
   public subscribe(listener: (state: StudentState) => void): () => void {
@@ -108,6 +154,14 @@ export class StudentStateManager {
   }
 
   public destroy() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    if (this.beforeUnloadHandler && typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+    }
+    this.flushPendingWrites();
     if (this.unsubscribeEventBus) {
       this.unsubscribeEventBus();
     }
@@ -128,7 +182,78 @@ export class StudentStateManager {
   }
 
   /**
+   * Hydrates state from Firestore with deep merging across multi-device sessions.
+   */
+  private async hydrateFromFirestore(uid: string, level?: string) {
+    try {
+      const snap = await getDoc(studentStateDoc(uid));
+      if (snap.exists()) {
+        const remote = snap.data() as Partial<StudentState>;
+
+        // Deep merge conceptMastery (prioritize higher attempts & latest tested timestamp)
+        const mergedMastery: Record<string, ConceptMasteryRecord> = { ...this.state.conceptMastery };
+        if (remote.conceptMastery) {
+          for (const [cid, remoteRec] of Object.entries(remote.conceptMastery)) {
+            const localRec = mergedMastery[cid];
+            if (!localRec) {
+              mergedMastery[cid] = remoteRec;
+            } else {
+              mergedMastery[cid] = {
+                ...localRec,
+                attempts: Math.max(localRec.attempts, remoteRec.attempts),
+                correct: Math.max(localRec.correct, remoteRec.correct),
+                accuracy: remoteRec.attempts >= localRec.attempts ? remoteRec.accuracy : localRec.accuracy,
+                confidence: Math.max(localRec.confidence, remoteRec.confidence),
+                consecutiveCorrect: Math.max(localRec.consecutiveCorrect, remoteRec.consecutiveCorrect),
+                consecutiveIncorrect: Math.min(localRec.consecutiveIncorrect, remoteRec.consecutiveIncorrect),
+                lastTested: Math.max(localRec.lastTested || 0, remoteRec.lastTested || 0),
+                mistakeTypes: Array.from(new Set([...(localRec.mistakeTypes || []), ...(remoteRec.mistakeTypes || [])])),
+              };
+            }
+          }
+        }
+
+        // Deep merge retention schedules
+        const mergedSchedules: Record<string, RetentionSchedule> = { ...this.state.retentionSchedules };
+        if (remote.retentionSchedules) {
+          for (const [cid, remoteSch] of Object.entries(remote.retentionSchedules)) {
+            const localSch = mergedSchedules[cid];
+            if (!localSch || (remoteSch.repetitions || 0) >= (localSch.repetitions || 0)) {
+              mergedSchedules[cid] = remoteSch;
+            }
+          }
+        }
+
+        // Deep merge active interventions
+        const mergedInterventions: Record<string, InterventionDirective> = {
+          ...remote.activeInterventions,
+          ...this.state.activeInterventions,
+        };
+
+        this.state = {
+          ...createInitialStudentState(uid, level),
+          ...remote,
+          uid,
+          conceptMastery: mergedMastery,
+          retentionSchedules: mergedSchedules,
+          activeInterventions: mergedInterventions,
+          totalExercisesCompleted: Math.max(this.state.totalExercisesCompleted, remote.totalExercisesCompleted || 0),
+          lastActiveTimestamp: Math.max(this.state.lastActiveTimestamp, remote.lastActiveTimestamp || 0),
+        };
+
+        this.saveToLocalCache();
+      }
+    } catch (err) {
+      console.warn('[StudentStateManager] Firestore hydration failed, using local cache fallback:', err);
+    } finally {
+      this.isLoaded = true;
+      this.notify();
+    }
+  }
+
+  /**
    * Process an answered exercise and update student state in closed-loop fashion.
+   * Debounces Firestore network writes by 5 seconds to conserve quota.
    */
   public recordAnswer(
     conceptId: string,
@@ -161,7 +286,6 @@ export class StudentStateManager {
       record.correct += 1;
       record.consecutiveCorrect += 1;
       record.consecutiveIncorrect = 0;
-      // Confidence gains smoothly with correct answers, with streak bonus
       const streakBonus = Math.min(0.15, record.consecutiveCorrect * 0.05);
       record.confidence = Math.min(1.0, Math.round((record.confidence + 0.12 + streakBonus) * 100) / 100);
     } else {
@@ -184,7 +308,7 @@ export class StudentStateManager {
       this.state.conceptMastery
     );
 
-    // Calculate empirical learning strain signals (Point 4 Hardening)
+    // Calculate empirical learning strain signals
     const detectedSignals: StruggleSignalType[] = [];
     if (responseTimeMs > 15000) {
       detectedSignals.push('high_response_latency');
@@ -231,8 +355,22 @@ export class StudentStateManager {
     const qualityScore = isCorrect ? (responseTimeMs < 8000 ? 5 : 4) : 2;
     this.state.retentionSchedules[cleanConcept] = calculateNextReview(schedule, qualityScore);
 
-    // Persist to local storage
-    this.saveToStorage();
+    // Track touched concepts and mark pending writes
+    this.pendingConcepts.add(cleanConcept);
+    this.hasPendingWrites = true;
+
+    // Instant local cache save
+    this.saveToLocalCache();
+
+    // Schedule debounced Firestore write (5 seconds) for non-guest users
+    if (!isGuestUser(this.state.uid)) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+      }
+      this.debounceTimer = setTimeout(() => {
+        this.flushPendingWrites();
+      }, 5000);
+    }
 
     // Notify all active subscribers of the state transition
     this.notify();
@@ -240,7 +378,65 @@ export class StudentStateManager {
     return { state: { ...this.state }, intervention };
   }
 
-  private saveToStorage() {
+  /**
+   * Flushes any pending local mutations to Firestore using targeted dot-path keys.
+   */
+  public async flushPendingWrites(): Promise<void> {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
+    if (isGuestUser(this.state.uid) || !this.hasPendingWrites) {
+      return;
+    }
+
+    const touched = Array.from(this.pendingConcepts);
+    this.pendingConcepts.clear();
+    this.hasPendingWrites = false;
+
+    try {
+      const s = this.state;
+      const patch: Record<string, unknown> = {
+        cognitiveStage: s.cognitiveStage,
+        activePedagogy: s.activePedagogy,
+        learningStrain: s.learningStrain,
+        struggleSignal: s.struggleSignal,
+        cognitiveLoadScore: s.cognitiveLoadScore,
+        totalExercisesCompleted: s.totalExercisesCompleted,
+        lastActiveTimestamp: s.lastActiveTimestamp,
+      };
+
+      for (const cid of touched) {
+        if (s.conceptMastery[cid]) {
+          patch[`conceptMastery.${cid}`] = s.conceptMastery[cid];
+        }
+        if (s.retentionSchedules[cid]) {
+          patch[`retentionSchedules.${cid}`] = s.retentionSchedules[cid];
+        }
+        if (s.activeInterventions[cid]) {
+          patch[`activeInterventions.${cid}`] = s.activeInterventions[cid];
+        }
+      }
+
+      const ref = studentStateDoc(s.uid);
+      const cleanPatch = cleanDataForFirestore(patch);
+
+      try {
+        await updateDoc(ref, cleanPatch as Record<string, any>);
+      } catch (err: any) {
+        if (err?.code === 'not-found' || err?.message?.includes('No document to update')) {
+          await setDoc(ref, cleanDataForFirestore(s), { merge: true });
+        } else {
+          console.warn('[StudentStateManager] Firestore dot-path update warning:', err);
+        }
+      }
+    } catch (writeErr) {
+      console.error('[StudentStateManager] Failed to flush writes to Firestore:', writeErr);
+    }
+  }
+
+  private saveToLocalCache() {
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem(
@@ -249,11 +445,11 @@ export class StudentStateManager {
         );
       }
     } catch (e) {
-      console.warn('[StudentStateManager] Storage save failed:', e);
+      console.warn('[StudentStateManager] Local cache save failed:', e);
     }
   }
 
-  private loadFromStorage(uid: string): StudentState | null {
+  private loadFromLocalCache(uid: string): StudentState | null {
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem(`${STORAGE_PREFIX}${uid}`);

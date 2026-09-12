@@ -1,4 +1,4 @@
-﻿/**
+/**
  * React hook for Cognify 2.0 Student State (Point 1 Integration)
  * Provides reactive access to the Unified Student State Engine.
  */
@@ -8,6 +8,7 @@ import {
   StudentStateManager,
   getStudentStateManager,
   createInitialStudentState,
+  isGuestUser,
 } from './studentStateEngine';
 import { InterventionDirective } from './interventionEngine';
 
@@ -25,6 +26,11 @@ export interface UseStudentStateResult {
   learningStrain: StudentState['learningStrain'];
   conceptMastery: StudentState['conceptMastery'];
   retentionSchedules: StudentState['retentionSchedules'];
+  /**
+   * True once the authoritative student state has resolved (instant for guests,
+   * post-hydration for authenticated users). Prevents flashing 0-progress state.
+   */
+  isLoaded: boolean;
 }
 
 export function useStudentState(uid?: string, initialLevel?: string): UseStudentStateResult {
@@ -33,13 +39,23 @@ export function useStudentState(uid?: string, initialLevel?: string): UseStudent
     return getStudentStateManager(uid, initialLevel).getState();
   });
 
+  const [isLoaded, setIsLoaded] = useState<boolean>(() => {
+    if (!uid || isGuestUser(uid)) return true;
+    return getStudentStateManager(uid, initialLevel).loaded;
+  });
+
   useEffect(() => {
-    if (!uid) return;
+    if (!uid) {
+      setIsLoaded(true);
+      return;
+    }
     const manager = getStudentStateManager(uid, initialLevel);
     setState(manager.getState());
+    setIsLoaded(manager.loaded);
 
     const unsub = manager.subscribe((updated) => {
       setState(updated);
+      setIsLoaded(manager.loaded);
     });
 
     return () => {
@@ -70,5 +86,6 @@ export function useStudentState(uid?: string, initialLevel?: string): UseStudent
     learningStrain: state.learningStrain,
     conceptMastery: state.conceptMastery || {},
     retentionSchedules: state.retentionSchedules || {},
+    isLoaded,
   };
 }
