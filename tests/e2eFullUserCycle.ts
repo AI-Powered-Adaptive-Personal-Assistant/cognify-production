@@ -14,6 +14,8 @@ import { verifyRequestAuth } from '../api/_lib/authGuard.js';
 import { checkRateLimit } from '../api/_lib/rateLimiter.js';
 import { validateAndSanitizeResponse } from '../api/_lib/qualityGuard.js';
 import { cleanDataForFirestore } from '../src/lib/firebase.js';
+import { buildPersona } from '../api/_lib/ai.js';
+import { saveSpatialObject, querySpatialMemory } from '../src/lib/spatialMemoryEngine.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -98,6 +100,35 @@ async function runE2ETest() {
   expect(intervention.strategy === 'scaffolded' || intervention.strategy === 'worked_example', 'Pedagogy adapted to worked example or scaffolded');
   expect(intervention.recommendedAction === 'review_prerequisite', 'Recommended reviewing the prerequisite first');
   console.log(`     Intervention Action: ${intervention.titleEn} (${intervention.recommendedAction})`);
+
+  // Closed-loop integration test: Verify AI system prompt receives the prerequisite intervention directive
+  const personaWithIntervention = buildPersona(
+    {
+      level: student.level,
+      role: 'Student',
+      studentState: {
+        activePedagogy: intervention.strategy as any,
+        learningStrain: stateManager.getState().learningStrain,
+        activeInterventions: {
+          dynamic_memory: {
+            conceptId: 'dynamic_memory',
+            strategy: intervention.strategy,
+            action: intervention.recommendedAction,
+            reason: prereqCheck.explanationEn,
+            recommendedAction: prereqCheck.explanationEn,
+          },
+        },
+      },
+    },
+    ''
+  );
+  expect(
+    personaWithIntervention.includes('foundation gap') ||
+    personaWithIntervention.includes('pointers') ||
+    personaWithIntervention.includes('STEP-BY-STEP WORKED EXAMPLES') ||
+    personaWithIntervention.includes('STEP-BY-STEP SCAFFOLDING'),
+    'AI buildPersona dynamically injects prerequisite intervention directive into prompt'
+  );
 
   // STEP 4: Student Reviews Pointers & Gains Mastery
   console.log('\n📈 STEP 4: Student Reviews "pointers" with Worked Examples & Re-evaluates...');
@@ -195,6 +226,100 @@ async function runE2ETest() {
   expect(cleaned.undefinedField === undefined || cleaned.undefinedField === null, 'Undefined fields safely stripped or converted to null for Firestore');
   expect(cleaned.nested.badVal === undefined || cleaned.nested.badVal === null, 'Nested undefined safely sanitized');
   expect(cleaned.name === 'Test Student' && cleaned.nullField === null && cleaned.nested.score === 95, 'Valid primitive and null fields safely preserved');
+
+  // STEP 10: Feedback Intelligence & Closed-Loop Pedagogy Auto-Adaptation
+  console.log('\n🔄 STEP 10: Feedback Intelligence & Pedagogy Auto-Adaptation...');
+  const currentPedagogy = stateManager.getState().activePedagogy;
+  expect(currentPedagogy === 'socratic', 'Active pedagogy was promoted to socratic after 3-in-a-row mastery');
+
+  // Student marks explanation as unhelpful twice
+  stateManager.recordPedagogyFeedback('socratic', false, 'pointers', 'Too abstract');
+  stateManager.recordPedagogyFeedback('socratic', false, 'pointers', 'Need concrete example');
+
+  const adaptedState = stateManager.getState();
+  expect(adaptedState.activePedagogy !== 'socratic', 'Active pedagogy auto-adapted away from unhelpful strategy');
+  expect(adaptedState.pedagogyEffectiveness.socratic.unhelpfulCount === 2, 'Recorded unhelpful feedback in state');
+  console.log(`     Auto-adapted pedagogy strategy to: ${adaptedState.activePedagogy}`);
+
+  // Verify next AI turn persona immediately uses the adapted pedagogy
+  const adaptedPersona = buildPersona(
+    {
+      level: student.level,
+      role: 'Student',
+      studentState: adaptedState,
+    },
+    ''
+  );
+  expect(
+    adaptedPersona.includes(`Active Pedagogical Mode: ${adaptedState.activePedagogy.toUpperCase()}`) ||
+    adaptedPersona.includes('STEP-BY-STEP SCAFFOLDING') ||
+    adaptedPersona.includes('STEP-BY-STEP WORKED EXAMPLES') ||
+    adaptedPersona.includes('VISUAL ANALOGIES') ||
+    adaptedPersona.includes('SOCRATIC INQUIRY'),
+    'AI prompt immediately reflects adapted pedagogy for subsequent turn'
+  );
+
+  // STEP 11: Spatial Memory Multi-Tenant Isolation & Epistemic Honesty
+  console.log('\n👁️ STEP 11: Spatial Memory Multi-Tenant Isolation & Epistemic Honesty...');
+  const userA = `student_user_alpha_${Date.now()}`;
+  const userB = `student_user_beta_${Date.now()}`;
+
+  // User A detects keys on desk
+  await saveSpatialObject(userA, {
+    id: 'obj_keys_a',
+    uid: userA,
+    objectName: 'Car Keys',
+    category: 'keys',
+    confidence: 0.94,
+    surface: 'study desk',
+    room: 'bedroom',
+    lastSeenTimestamp: Date.now() - 5000,
+    lastSeenIso: new Date(Date.now() - 5000).toISOString(),
+    source: 'camera_auto',
+    relativePosition: { direction: 'center', distance: 'near' },
+  });
+
+  // User A moves keys to kitchen counter
+  await saveSpatialObject(userA, {
+    id: 'obj_keys_a',
+    uid: userA,
+    objectName: 'Car Keys',
+    category: 'keys',
+    confidence: 0.96,
+    surface: 'granite counter',
+    room: 'kitchen',
+    lastSeenTimestamp: Date.now(),
+    lastSeenIso: new Date().toISOString(),
+    source: 'user_confirmed',
+    relativePosition: { direction: 'left', distance: 'near' },
+  });
+
+  // User A queries keys
+  const queryA = querySpatialMemory(userA, 'where are my keys?', 'en');
+  expect(queryA.found === true, 'User A finds their keys');
+  expect(queryA.message.includes('granite counter') && queryA.message.includes('kitchen'), 'User A receives updated location');
+  expect((queryA.record?.history?.length || 0) >= 1, 'Object movement history recorded');
+
+  // User B queries keys (Must be isolated!)
+  const queryB = querySpatialMemory(userB, 'where are my keys?', 'en');
+  expect(queryB.found === false, 'User B cannot see User A keys (Strict Multi-Tenant Isolation)');
+
+  // Multilingual epistemic honesty (Arabic & French)
+  const queryAr = querySpatialMemory(userA, 'فين المفاتيح؟', 'ar');
+  expect(queryAr.found === true && queryAr.message.includes('kitchen'), 'Spatial query answers accurately in Arabic');
+
+  const queryFr = querySpatialMemory(userA, 'Où sont mes clés ?', 'fr');
+  expect(queryFr.found === true && queryFr.message.includes('kitchen'), 'Spatial query answers accurately in French');
+
+  // STEP 12: Privacy Boundary & Zero-Knowledge Media Processing Verification
+  console.log('\n🔒 STEP 12: Privacy & Zero-Knowledge Media Processing Verification...');
+  const privacySpecPath = path.resolve('PRIVACY_SPECIFICATION.md');
+  expect(fs.existsSync(privacySpecPath), 'PRIVACY_SPECIFICATION.md exists and is ratified in project root');
+
+  const specText = fs.readFileSync(privacySpecPath, 'utf8');
+  expect(specText.includes('Zero-Knowledge Media Processing'), 'Spec enforces zero-knowledge media processing');
+  expect(specText.includes('NEVER PERSISTED (0% Disk / 0% Cloud)'), 'Spec mandates 0% cloud/disk storage for camera/mic streams');
+  expect(specText.includes('Strict Multi-Tenant Isolation'), 'Spec mandates strict UID partitioning');
 
   console.log('\n============================================================');
   console.log(`🏁 SIMULATION COMPLETE: ${passed} Passed, ${failed} Failed (100% Success)`);

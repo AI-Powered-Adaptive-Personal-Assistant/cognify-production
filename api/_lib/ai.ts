@@ -124,9 +124,12 @@ export interface StudentStatePayload {
   activeInterventions?: Record<string, {
     conceptId: string;
     strategy: string;
-    action: string;
-    reason: string;
+    action?: string;
+    reason?: string;
     recommendedAction?: string;
+    promptDirective?: string;
+    explanationEn?: string;
+    titleEn?: string;
   }>;
   conceptMastery?: Record<string, {
     conceptId: string;
@@ -261,15 +264,22 @@ function formatCognitiveCalibration(style?: string, level?: string): string {
     res += `\n## ACTIVE PEDAGOGICAL STYLE: VISUAL ANALOGIES & METAPHORS
 - Anchor explanations in physical, real-world analogies (mailboxes, water pipes, maps).
 - Prioritize visual mental models and intuitive concepts before syntax.`;
-  } else if (style === 'technical') {
+  } else if (style === 'technical' || style === 'advanced_rigor') {
     res += `\n## ACTIVE PEDAGOGICAL STYLE: DEEP TECHNICAL & ACADEMIC RIGOR
-- Be concise, dense, and precise. Reference time/space complexity (Big-O), memory layout, and formal specifications.`;
+- Be concise, dense, and precise. Reference time/space complexity (Big-O), memory layout, and formal specifications.
+- Relate concepts directly to high-scale industry architectures and production trade-offs.`;
   } else if (style === 'scaffolded') {
     res += `\n## ACTIVE PEDAGOGICAL STYLE: STEP-BY-STEP SCAFFOLDING
-- Deconstruct the problem into numbered, sequential micro-milestones with quick comprehension checks.`;
+- Deconstruct the problem into numbered, sequential micro-milestones with quick comprehension checks.
+- Build up from simplest premises toward the complete solution without skipping intermediate steps.`;
+  } else if (style === 'worked_example') {
+    res += `\n## ACTIVE PEDAGOGICAL STYLE: STEP-BY-STEP WORKED EXAMPLES
+- Provide an end-to-end concrete worked example with extensive inline reasoning before asking the student to practice.
+- Break down each line of code, math calculation, or decision point explicitly so the entire cognitive path is transparent.`;
   } else if (style === 'socratic') {
     res += `\n## ACTIVE PEDAGOGICAL STYLE: SOCRATIC INQUIRY
-- Guide the student by asking 1-2 targeted probing questions so they deduce the solution inductively.`;
+- Guide the student by asking 1-2 targeted probing questions so they deduce the solution inductively.
+- Never hand over the solution upfront; encourage the learner to test their own hypotheses.`;
   }
 
   return res;
@@ -298,12 +308,14 @@ function formatStudentStateBlock(state?: StudentStatePayload): string {
   }
 
   if (activeIntervention) {
+    const act = activeIntervention.action || activeIntervention.recommendedAction;
+    const rsn = activeIntervention.reason || activeIntervention.explanationEn || activeIntervention.promptDirective || 'Identified learning stumbling block';
     block += `\n## ACTIVE INTERVENTION DIRECTIVE:
 - Strategy: ${activeIntervention.strategy}
 - Target Concept: ${activeIntervention.conceptId}
-- Diagnosed Root Cause: ${activeIntervention.reason}
+- Diagnosed Root Cause: ${rsn}
 ${activeIntervention.recommendedAction ? `- Specific Remediation Action: ${activeIntervention.recommendedAction}\n` : ''}`;
-    if (activeIntervention.action === 'review_prerequisite') {
+    if (act === 'review_prerequisite') {
       block += `- CRITICAL: The student is stumbling because of a foundation gap in "${activeIntervention.conceptId}". Before advancing, briefly explain and solidify this prerequisite using concrete real-world intuition.\n`;
     } else if (activeIntervention.strategy === 'worked_example') {
       block += `- CRITICAL: Provide a complete step-by-step worked example with thorough inline commentary before asking the student to solve on their own.\n`;

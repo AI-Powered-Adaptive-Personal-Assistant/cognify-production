@@ -4,6 +4,8 @@
  */
 
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { calculateNormalizedGain } from '../src/lib/evaluationEngine.js';
 import { getConcept, diagnosePrerequisiteGap, detectConceptFromText } from '../src/lib/conceptGraph.js';
 import { checkRateLimit } from '../api/_lib/rateLimiter.js';
@@ -1164,6 +1166,101 @@ async function run() {
 
     assert(capturedFeedback !== null, 'FEEDBACK_RECORDED event received by event bus subscribers');
     unsubFb();
+  }
+
+  // 24. Multi-User Spatial Memory Isolation & Epistemic Honesty
+  console.log('\n[24] Multi-User Spatial Memory Isolation & Epistemic Honesty');
+  {
+    const user1 = 'spatial_test_user_1';
+    const user2 = 'spatial_test_user_2';
+
+    // Save object for user 1
+    await saveSpatialObject(user1, {
+      id: 'sp_keys_1',
+      uid: user1,
+      objectName: 'House Keys',
+      category: 'keys',
+      confidence: 0.95,
+      surface: 'wooden nightstand',
+      room: 'master bedroom',
+      lastSeenTimestamp: Date.now() - 60000,
+      lastSeenIso: new Date(Date.now() - 60000).toISOString(),
+      source: 'camera_auto',
+      relativePosition: { direction: 'center', distance: 'near' },
+    });
+
+    // Save location update for user 1 (moving keys to entryway console table)
+    await saveSpatialObject(user1, {
+      id: 'sp_keys_1',
+      uid: user1,
+      objectName: 'House Keys',
+      category: 'keys',
+      confidence: 0.98,
+      surface: 'entryway console table',
+      room: 'hallway',
+      lastSeenTimestamp: Date.now(),
+      lastSeenIso: new Date().toISOString(),
+      source: 'user_confirmed',
+      relativePosition: { direction: 'right', distance: 'near' },
+    });
+
+    const user1Objects = getSpatialObjects(user1);
+    assert(user1Objects.length === 1, 'User 1 has 1 tracked spatial object');
+    assert(user1Objects[0].surface === 'entryway console table', 'Updates to latest observed surface');
+    assert((user1Objects[0].history?.length || 0) >= 1, 'Maintains previous location in history');
+
+    // Strict Multi-User Isolation: User 2 must see 0 objects
+    const user2Objects = getSpatialObjects(user2);
+    assert(user2Objects.length === 0, 'User 2 spatial memory is completely isolated (0 objects)');
+
+    // Epistemic honesty queries
+    const queryEn = querySpatialMemory(user1, 'where did I put my keys?', 'en');
+    assert(queryEn.found === true, 'querySpatialMemory finds keys in English');
+    assert(queryEn.message.includes('entryway console table'), 'References accurate surface');
+
+    const queryAr = querySpatialMemory(user1, 'فين المفاتيح؟', 'ar');
+    assert(queryAr.found === true, 'querySpatialMemory finds keys in Arabic');
+    assert(queryAr.message.includes('entryway console table'), 'Arabic response references correct location');
+
+    const queryFr = querySpatialMemory(user1, 'où sont mes clés ?', 'fr');
+    assert(queryFr.found === true, 'querySpatialMemory finds keys in French');
+    assert(queryFr.message.includes('entryway console table'), 'French response references correct location');
+
+    // Negative query (Unobserved item)
+    const unobservedQuery = querySpatialMemory(user1, 'where is my medication?', 'en');
+    assert(unobservedQuery.found === false, 'Truthfully reports unobserved object as not found');
+    assert(unobservedQuery.message.includes("haven't observed this object"), 'Epistemically honest reassurance');
+
+    // Cross-user leakage prevention
+    const leakAttempt = querySpatialMemory(user2, 'where are my keys?', 'en');
+    assert(leakAttempt.found === false, 'User 2 cannot query User 1 items');
+  }
+
+  // 25. Multi-Tenant Privacy & Data Boundary Isolation
+  console.log('\n[25] Multi-Tenant Privacy & Data Boundary Isolation');
+  {
+    // Privacy Specification document existence
+    const specPath = path.resolve('PRIVACY_SPECIFICATION.md');
+    assert(fs.existsSync(specPath), 'PRIVACY_SPECIFICATION.md exists in project root');
+
+    const specContent = fs.readFileSync(specPath, 'utf8');
+    assert(specContent.includes('Zero-Knowledge Media Processing'), 'Spec documents Zero-Knowledge media processing');
+    assert(specContent.includes('NEVER PERSISTED'), 'Spec guarantees camera and mic streams are never persisted');
+    assert(specContent.includes('Strict Multi-Tenant Isolation'), 'Spec defines strict multi-tenant boundary rules');
+
+    // Student state multi-tenant isolation
+    const studentA = getStudentStateManager('tenant_student_A');
+    const studentB = getStudentStateManager('tenant_student_B');
+
+    studentA.recordAnswer('calculus_integrals', true, 4000);
+    assert(studentA.getState().conceptMastery.calculus_integrals?.attempts === 1, 'Student A records attempt');
+    assert(studentB.getState().conceptMastery.calculus_integrals === undefined, 'Student B state remains strictly isolated');
+
+    // AI prompt multi-tenant isolation
+    const personaA = buildPersona({ level: 'Basic', studentState: studentA.getState() });
+    const personaB = buildPersona({ level: 'Basic', studentState: studentB.getState() });
+    assert(personaA.includes('CALCULUS_INTEGRALS') || personaA.includes('REAL-TIME COGNITIVE'), 'Persona A reflects Student A mastery');
+    assert(!personaB.includes('CALCULUS_INTEGRALS'), 'Persona B does not leak Student A mastery');
   }
 
   console.log(`\n========================================`);
