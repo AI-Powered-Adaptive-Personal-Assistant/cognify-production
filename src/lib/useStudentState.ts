@@ -21,6 +21,12 @@ export interface UseStudentStateResult {
     responseTimeMs: number,
     mistakeType?: string
   ) => { state: StudentState; intervention?: InterventionDirective } | null;
+  recordPedagogyFeedback: (
+    pedagogy?: string,
+    helpful?: boolean,
+    conceptId?: string,
+    reason?: string
+  ) => StudentState | null;
   activeIntervention: InterventionDirective | null;
   activePedagogy: string;
   learningStrain: StudentState['learningStrain'];
@@ -73,6 +79,14 @@ export function useStudentState(uid?: string, initialLevel?: string): UseStudent
     [manager]
   );
 
+  const recordPedagogyFeedback = useCallback(
+    (pedagogy?: string, helpful?: boolean, conceptId?: string, reason?: string) => {
+      if (!manager) return null;
+      return manager.recordPedagogyFeedback(pedagogy as any, helpful, conceptId, reason);
+    },
+    [manager]
+  );
+
   const activeInterventions = state.activeInterventions || {};
   const interventionList = Object.values(activeInterventions);
   const activeIntervention = interventionList.length > 0 ? interventionList[0] : null;
@@ -81,6 +95,7 @@ export function useStudentState(uid?: string, initialLevel?: string): UseStudent
     studentState: state,
     manager,
     recordAnswer,
+    recordPedagogyFeedback,
     activeIntervention,
     activePedagogy: state.activePedagogy || 'scaffolded',
     learningStrain: state.learningStrain,

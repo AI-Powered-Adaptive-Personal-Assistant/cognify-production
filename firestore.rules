@@ -48,6 +48,7 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isFounderSuperAdmin() ||
+             (isAuthenticated() && request.auth.token.get('role', '') == 'superadmin') ||
              (isAuthenticated() &&
               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuperAdmin', false) == true);
@@ -69,18 +70,17 @@ service cloud.firestore {
     // Permanent email-based admins (below super admins).
     function isPermanentAdmin() {
       return isAuthenticated() && request.auth.token.email.lower() in [
-        "marwaneltaweel0@gmail.com",
         "its.alkhateeb@gmail.com",
         "esraahosni8@gmail.com",
-        "nermeenatefateffarouk@gmail.com",
         "audit.test.student2026@gmail.com"
       ];
     }
 
-    // Admin = super admin OR permanent admin OR a user whose own /users doc has
+    // Admin = super admin OR permanent admin OR custom claim role OR a user whose own /users doc has
     // isAdmin:true (granted via the Admin Dashboard).
     function isAdmin() {
       return isSuperAdmin() || isPermanentAdmin() ||
+             (isAuthenticated() && request.auth.token.get('role', '') in ['admin', 'superadmin']) ||
              (isAuthenticated() &&
               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true);
@@ -95,10 +95,8 @@ service cloud.firestore {
       return [
         "modyhashim2006@gmail.com",
         "pro.mahmoud.h@gmail.com",
-        "marwaneltaweel0@gmail.com",
         "its.alkhateeb@gmail.com",
-        "esraahosni8@gmail.com",
-        "nermeenatefateffarouk@gmail.com"
+        "esraahosni8@gmail.com"
       ];
     }
 
@@ -217,6 +215,11 @@ service cloud.firestore {
       //    deleted — not even by another super admin.
       allow delete: if isSuperAdmin() && !isProtectedTarget();
       
+      // Explicit Learning Events Store rule for audit trails, event replay, and state projection
+      match /learningEvents/{eventId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Subcollections (threads, sandbox, goals, courses, attendance, planner,
       // notes, ...): the owner has full access; admins can read everything but
       // may only WRITE to a non-protected user's data — a permanent member's

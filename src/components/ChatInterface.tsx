@@ -14,6 +14,7 @@ import { toast } from "./Toast";
 import MarkdownMessage from "./MarkdownMessage";
 import { speak as speakText, cancelSpeech } from "../lib/tts";
 import { useStudentState } from "../lib/useStudentState";
+import { eventBus } from "../lib/learningEvents";
 import { detectConceptFromText } from "../lib/conceptGraph";
 import { getSpatialObjects } from "../lib/spatialMemoryEngine";
 import ChatWorkspacePanel, { StudySubject } from './chat/ChatWorkspacePanel';
@@ -164,7 +165,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
   });
   const [showFrenchTravelAssistant, setShowFrenchTravelAssistant] = useState(false);
 
-  const { studentState, recordAnswer } = useStudentState(profile?.uid, profile?.level);
+  const { studentState, recordAnswer, recordPedagogyFeedback } = useStudentState(profile?.uid, profile?.level);
   const [activePedagogyStyle, setActivePedagogyStyle] = useState<PedagogyStyle>(
     (studentState?.activePedagogy as any) || profile?.preferredPedagogyStyle || 'analogies'
   );
@@ -1112,9 +1113,11 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
   const handleReactToMessage = async (messageId: string, reactionType: 'up' | 'down') => {
     if (!profile.uid || !profile.activeThreadId) return;
 
+    let appliedReaction: 'up' | 'down' | undefined = undefined;
     const updatedMessages = messages.map(m => {
       if (m.id === messageId) {
         const newReaction = m.reaction === reactionType ? undefined : reactionType;
+        appliedReaction = newReaction;
         return { ...m, reaction: newReaction };
       }
       return m;
@@ -1128,6 +1131,33 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
     setDoc(doc(db, threadPath), { messages: historyToSave }, { merge: true }).catch(err => {
         handleFirestoreError(err, OperationType.UPDATE, threadPath);
     });
+
+    // Closed-loop Intelligence: emit FEEDBACK_RECORDED and adjust student state pedagogy effectiveness
+    if (appliedReaction) {
+      const isHelpful = appliedReaction === 'up';
+      eventBus.emit('FEEDBACK_RECORDED', profile.uid, {
+        messageId,
+        pedagogyUsed: activePedagogyStyle,
+        helpful: isHelpful,
+        conceptId: activeSubjectId,
+      });
+
+      recordPedagogyFeedback(
+        activePedagogyStyle,
+        isHelpful,
+        activeSubjectId
+      );
+
+      if (!isHelpful) {
+        toast.info(
+          localize(
+            profile.language,
+            'Adapting explanation style for upcoming responses...',
+            'جاري تكييف أسلوب الشرح للردود القادمة...'
+          )
+        );
+      }
+    }
   };
 
   const handleDownload = (file: {name: string, type: string, data?: string, url?: string}) => {

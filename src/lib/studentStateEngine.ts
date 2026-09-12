@@ -15,15 +15,15 @@ import {
   createInitialRetentionSchedule,
   calculateNextReview,
 } from './spacedRetention';
-import { eventBus, LearningEvent, ExerciseAnsweredPayload } from './learningEvents';
+import {
+  eventBus,
+  LearningEvent,
+  ExerciseAnsweredPayload,
+  FeedbackRecordedPayload,
+  isGuestUser,
+} from './learningEvents';
 
-/**
- * Checks whether a user ID represents an unauthenticated guest or demo session.
- * Guest users bypass remote Firestore network calls completely.
- */
-export function isGuestUser(uid?: string | null): boolean {
-  return !uid || uid === 'guest' || uid === 'anonymous' || uid === 'demo';
-}
+export { isGuestUser };
 
 /**
  * Canonical Firestore document path for student state.
@@ -51,6 +51,14 @@ export interface LearningStrain {
   signals: StruggleSignalType[];
 }
 
+export type PedagogyStrategy = 'analogies' | 'scaffolded' | 'worked_example' | 'socratic' | 'advanced_rigor';
+
+export interface PedagogyMetrics {
+  helpfulCount: number;
+  unhelpfulCount: number;
+  score: number; // 0.1 to 1.0 dynamic weighting
+}
+
 export interface StudentState {
   uid: string;
   /**
@@ -58,7 +66,8 @@ export interface StudentState {
    * Used strictly to adapt initial explanation tone and scaffolding.
    */
   cognitiveStage: CognitiveStage;
-  activePedagogy: 'analogies' | 'scaffolded' | 'worked_example' | 'socratic' | 'advanced_rigor';
+  activePedagogy: PedagogyStrategy;
+  pedagogyEffectiveness: Record<PedagogyStrategy, PedagogyMetrics>;
   learningStrain: LearningStrain;
   struggleSignal: number;     // 0.0 to 1.0 (convenience scalar matching learningStrain.possibleStruggle)
   cognitiveLoadScore: number; // Deprecated alias maintained for backward compatibility
@@ -76,6 +85,13 @@ export function createInitialStudentState(uid: string, level?: string): StudentS
     uid,
     cognitiveStage: resolveCognitiveStage(level),
     activePedagogy: 'scaffolded',
+    pedagogyEffectiveness: {
+      scaffolded: { helpfulCount: 0, unhelpfulCount: 0, score: 0.8 },
+      worked_example: { helpfulCount: 0, unhelpfulCount: 0, score: 0.75 },
+      analogies: { helpfulCount: 0, unhelpfulCount: 0, score: 0.7 },
+      socratic: { helpfulCount: 0, unhelpfulCount: 0, score: 0.65 },
+      advanced_rigor: { helpfulCount: 0, unhelpfulCount: 0, score: 0.6 },
+    },
     learningStrain: {
       possibleStruggle: 0.2,
       confidence: 0.5,
@@ -169,7 +185,7 @@ export class StudentStateManager {
   }
 
   private initEventListeners() {
-    this.unsubscribeEventBus = eventBus.on('EXERCISE_ANSWERED', (event: LearningEvent<ExerciseAnsweredPayload>) => {
+    const unsubExercise = eventBus.on('EXERCISE_ANSWERED', (event: LearningEvent<ExerciseAnsweredPayload>) => {
       if (event.uid === this.state.uid && event.payload) {
         this.recordAnswer(
           event.payload.conceptId || event.payload.topic,
@@ -179,6 +195,22 @@ export class StudentStateManager {
         );
       }
     });
+
+    const unsubFeedback = eventBus.on('FEEDBACK_RECORDED', (event: LearningEvent<FeedbackRecordedPayload>) => {
+      if (event.uid === this.state.uid && event.payload) {
+        this.recordPedagogyFeedback(
+          event.payload.pedagogyUsed as any,
+          event.payload.helpful,
+          event.payload.conceptId,
+          event.payload.reason
+        );
+      }
+    });
+
+    this.unsubscribeEventBus = () => {
+      unsubExercise();
+      unsubFeedback();
+    };
   }
 
   /**
@@ -189,6 +221,14 @@ export class StudentStateManager {
       const snap = await getDoc(studentStateDoc(uid));
       if (snap.exists()) {
         const remote = snap.data() as Partial<StudentState>;
+
+        // Deep merge pedagogyEffectiveness
+        if (remote.pedagogyEffectiveness) {
+          this.state.pedagogyEffectiveness = {
+            ...this.state.pedagogyEffectiveness,
+            ...remote.pedagogyEffectiveness,
+          };
+        }
 
         // Deep merge conceptMastery (prioritize higher attempts & latest tested timestamp)
         const mergedMastery: Record<string, ConceptMasteryRecord> = { ...this.state.conceptMastery };
@@ -379,6 +419,77 @@ export class StudentStateManager {
   }
 
   /**
+   * Records student feedback (helpful/unhelpful) on a pedagogical strategy.
+   * Dynamically adjusts strategy effectiveness scores and triggers auto-adaptation.
+   */
+  public recordPedagogyFeedback(
+    pedagogy?: PedagogyStrategy | string,
+    helpful?: boolean,
+    conceptId?: string,
+    reason?: string
+  ): StudentState {
+    const validStrategies: PedagogyStrategy[] = [
+      'analogies',
+      'scaffolded',
+      'worked_example',
+      'socratic',
+      'advanced_rigor',
+    ];
+
+    const targetStrategy: PedagogyStrategy = validStrategies.includes(pedagogy as PedagogyStrategy)
+      ? (pedagogy as PedagogyStrategy)
+      : this.state.activePedagogy;
+
+    const metrics = this.state.pedagogyEffectiveness[targetStrategy] || {
+      helpfulCount: 0,
+      unhelpfulCount: 0,
+      score: 0.7,
+    };
+
+    if (helpful) {
+      metrics.helpfulCount += 1;
+      metrics.score = Math.min(1.0, Math.round((metrics.score + 0.05) * 100) / 100);
+    } else {
+      metrics.unhelpfulCount += 1;
+      metrics.score = Math.max(0.1, Math.round((metrics.score - 0.1) * 100) / 100);
+
+      // Auto-adapt: If current active pedagogy was rated unhelpful, switch to highest scoring alternative
+      if (this.state.activePedagogy === targetStrategy) {
+        let bestScore = -1;
+        let bestStrategy: PedagogyStrategy = 'scaffolded';
+        for (const strat of validStrategies) {
+          if (strat !== targetStrategy) {
+            const sMetrics = this.state.pedagogyEffectiveness[strat];
+            if (sMetrics && sMetrics.score > bestScore) {
+              bestScore = sMetrics.score;
+              bestStrategy = strat;
+            }
+          }
+        }
+        this.state.activePedagogy = bestStrategy;
+      }
+    }
+
+    this.state.pedagogyEffectiveness[targetStrategy] = metrics;
+    this.state.lastActiveTimestamp = Date.now();
+    this.hasPendingWrites = true;
+
+    this.saveToLocalCache();
+
+    if (!isGuestUser(this.state.uid)) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+      }
+      this.debounceTimer = setTimeout(() => {
+        this.flushPendingWrites();
+      }, 5000);
+    }
+
+    this.notify();
+    return { ...this.state };
+  }
+
+  /**
    * Flushes any pending local mutations to Firestore using targeted dot-path keys.
    */
   public async flushPendingWrites(): Promise<void> {
@@ -400,6 +511,7 @@ export class StudentStateManager {
       const patch: Record<string, unknown> = {
         cognitiveStage: s.cognitiveStage,
         activePedagogy: s.activePedagogy,
+        pedagogyEffectiveness: s.pedagogyEffectiveness,
         learningStrain: s.learningStrain,
         struggleSignal: s.struggleSignal,
         cognitiveLoadScore: s.cognitiveLoadScore,
@@ -473,4 +585,154 @@ export function getStudentStateManager(uid: string, level?: string): StudentStat
     managerCache.set(uid, new StudentStateManager(uid, level));
   }
   return managerCache.get(uid)!;
+}
+
+/**
+ * Deterministically projects an immutable sequence of LearningEvents into a canonical StudentState.
+ * Guarantees that student state can always be reconstructed, audited, or verified from historical evidence.
+ */
+export function projectEventsToState(
+  events: LearningEvent[],
+  uid: string,
+  level?: string
+): StudentState {
+  const state = createInitialStudentState(uid, level);
+  const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
+
+  for (const event of sorted) {
+    if (event.type === 'EXERCISE_ANSWERED' && event.payload) {
+      const {
+        conceptId,
+        topic,
+        isCorrect,
+        responseTimeMs = 5000,
+        mistakeType,
+      } = event.payload as ExerciseAnsweredPayload;
+
+      const cleanConcept = (conceptId || topic || 'general')
+        .toLowerCase()
+        .trim()
+        .replace(/[\s-]+/g, '_');
+
+      let record = state.conceptMastery[cleanConcept];
+      if (!record) {
+        record = {
+          conceptId: cleanConcept,
+          attempts: 0,
+          correct: 0,
+          accuracy: 0,
+          confidence: 0.5,
+          consecutiveCorrect: 0,
+          consecutiveIncorrect: 0,
+          lastTested: event.timestamp,
+          mistakeTypes: [],
+        };
+      }
+
+      record.attempts += 1;
+      record.lastTested = event.timestamp;
+
+      if (isCorrect) {
+        record.correct += 1;
+        record.consecutiveCorrect += 1;
+        record.consecutiveIncorrect = 0;
+        const streakBonus = Math.min(0.15, record.consecutiveCorrect * 0.05);
+        record.confidence = Math.min(1.0, Math.round((record.confidence + 0.12 + streakBonus) * 100) / 100);
+      } else {
+        record.consecutiveIncorrect += 1;
+        record.consecutiveCorrect = 0;
+        record.confidence = Math.max(0.1, Math.round((record.confidence - 0.15) * 100) / 100);
+        if (mistakeType && !record.mistakeTypes.includes(mistakeType)) {
+          record.mistakeTypes.push(mistakeType);
+        }
+      }
+
+      record.accuracy = Math.round((record.correct / record.attempts) * 100) / 100;
+      state.conceptMastery[cleanConcept] = record;
+      state.totalExercisesCompleted += 1;
+      state.lastActiveTimestamp = event.timestamp;
+
+      // Prerequisite diagnosis
+      const prereqDiagnosis = diagnosePrerequisiteGap(cleanConcept, state.conceptMastery);
+
+      // Strain detection
+      const detectedSignals: StruggleSignalType[] = [];
+      if (responseTimeMs > 15000) detectedSignals.push('high_response_latency');
+      if (record.consecutiveIncorrect >= 2) detectedSignals.push('repeated_errors');
+      if (prereqDiagnosis.hasPrerequisiteGap) detectedSignals.push('prerequisite_gap');
+
+      const latencyWeight = Math.min(0.5, responseTimeMs / 30000);
+      const errorWeight = Math.min(0.5, record.consecutiveIncorrect * 0.25);
+      const possibleStruggle = Math.min(1.0, Math.round((latencyWeight + errorWeight) * 100) / 100);
+      const confidence = Math.min(1.0, Math.round((0.5 + Math.min(0.5, record.attempts * 0.1)) * 100) / 100);
+
+      state.learningStrain = {
+        possibleStruggle,
+        confidence,
+        signals: detectedSignals,
+      };
+      state.struggleSignal = possibleStruggle;
+      state.cognitiveLoadScore = possibleStruggle;
+
+      const intervention = decideIntervention({
+        conceptId: cleanConcept,
+        consecutiveIncorrect: record.consecutiveIncorrect,
+        consecutiveCorrect: record.consecutiveCorrect,
+        accuracyRate: record.accuracy,
+        avgResponseTimeMs: responseTimeMs,
+        prerequisiteDiagnosis: prereqDiagnosis,
+        repeatedMistakeType: mistakeType,
+      });
+
+      state.activeInterventions[cleanConcept] = intervention;
+      state.activePedagogy = intervention.strategy;
+
+      let schedule = state.retentionSchedules[cleanConcept];
+      if (!schedule) schedule = createInitialRetentionSchedule(cleanConcept);
+      const qualityScore = isCorrect ? (responseTimeMs < 8000 ? 5 : 4) : 2;
+      state.retentionSchedules[cleanConcept] = calculateNextReview(schedule, qualityScore);
+    } else if (event.type === 'FEEDBACK_RECORDED' && event.payload) {
+      const payload = event.payload as FeedbackRecordedPayload;
+      const validStrategies: PedagogyStrategy[] = [
+        'analogies',
+        'scaffolded',
+        'worked_example',
+        'socratic',
+        'advanced_rigor',
+      ];
+      const target = validStrategies.includes(payload.pedagogyUsed as PedagogyStrategy)
+        ? (payload.pedagogyUsed as PedagogyStrategy)
+        : state.activePedagogy;
+
+      const m = state.pedagogyEffectiveness[target] || {
+        helpfulCount: 0,
+        unhelpfulCount: 0,
+        score: 0.7,
+      };
+
+      if (payload.helpful) {
+        m.helpfulCount += 1;
+        m.score = Math.min(1.0, Math.round((m.score + 0.05) * 100) / 100);
+      } else {
+        m.unhelpfulCount += 1;
+        m.score = Math.max(0.1, Math.round((m.score - 0.1) * 100) / 100);
+
+        if (state.activePedagogy === target) {
+          let bestScore = -1;
+          let bestStrat: PedagogyStrategy = 'scaffolded';
+          for (const s of validStrategies) {
+            if (s !== target && state.pedagogyEffectiveness[s]?.score > bestScore) {
+              bestScore = state.pedagogyEffectiveness[s].score;
+              bestStrat = s;
+            }
+          }
+          state.activePedagogy = bestStrat;
+        }
+      }
+      state.pedagogyEffectiveness[target] = m;
+      state.lastActiveTimestamp = event.timestamp;
+    }
+  }
+
+  return state;
 }

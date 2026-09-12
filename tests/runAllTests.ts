@@ -11,8 +11,14 @@ import { validateAndSanitizeResponse } from '../api/_lib/qualityGuard.js';
 import { calculateNextReview, createInitialRetentionSchedule } from '../src/lib/spacedRetention.js';
 import { resolveCognitiveStage, guard, buildPersona, buildContents } from '../api/_lib/ai.js';
 import { verifyRequestAuth, setTestCertProvider, getExpectedProjectId } from '../api/_lib/authGuard.js';
-import { eventBus } from '../src/lib/learningEvents.js';
-import { getStudentStateManager, createInitialStudentState, isGuestUser, studentStateDoc } from '../src/lib/studentStateEngine.js';
+import { eventBus, getLearningEventHistory } from '../src/lib/learningEvents.js';
+import {
+  getStudentStateManager,
+  createInitialStudentState,
+  isGuestUser,
+  studentStateDoc,
+  projectEventsToState,
+} from '../src/lib/studentStateEngine.js';
 import { classifyRequest } from '../api/_lib/router.js';
 import {
   extractSpatialObjectsFromVision,
@@ -1015,6 +1021,149 @@ async function run() {
     // Flush safety
     await guestManager.flushPendingWrites();
     assert(true, 'flushPendingWrites executes safely without throwing on guest sessions');
+  }
+
+  // 22. Persistent Learning Event Store & State Projection
+  console.log('\n[22] Persistent Learning Event Store & State Projection');
+  {
+    // Event creation and bus emission
+    let capturedEvent: any = null;
+    const unsub = eventBus.on('EXERCISE_ANSWERED', (ev) => {
+      capturedEvent = ev;
+    });
+
+    eventBus.emit('EXERCISE_ANSWERED', 'student_proj_test', {
+      subject: 'Math',
+      topic: 'quadratic_equations',
+      conceptId: 'quadratic_equations',
+      isCorrect: true,
+      responseTimeMs: 4200,
+      difficulty: 'medium',
+    });
+
+    assert(capturedEvent !== null, 'eventBus delivers EXERCISE_ANSWERED event to listener');
+    assert(capturedEvent.uid === 'student_proj_test', 'Event preserves student UID');
+    assert(capturedEvent.type === 'EXERCISE_ANSWERED', 'Event preserves event type');
+    unsub();
+
+    // Guest history safely retrieves without Firestore error
+    const guestHistory = await getLearningEventHistory('guest');
+    assert(Array.isArray(guestHistory), 'getLearningEventHistory returns array for guest');
+
+    // Deterministic state reconstruction from events (projectEventsToState)
+    const historicalEvents: any[] = [
+      {
+        id: 'ev_1',
+        type: 'EXERCISE_ANSWERED',
+        uid: 'proj_learner_42',
+        timestamp: 1000,
+        payload: {
+          conceptId: 'linear_algebra_vectors',
+          isCorrect: true,
+          responseTimeMs: 3000,
+          difficulty: 'easy',
+        },
+      },
+      {
+        id: 'ev_2',
+        type: 'EXERCISE_ANSWERED',
+        uid: 'proj_learner_42',
+        timestamp: 2000,
+        payload: {
+          conceptId: 'linear_algebra_vectors',
+          isCorrect: true,
+          responseTimeMs: 2500,
+          difficulty: 'medium',
+        },
+      },
+      {
+        id: 'ev_3',
+        type: 'EXERCISE_ANSWERED',
+        uid: 'proj_learner_42',
+        timestamp: 3000,
+        payload: {
+          conceptId: 'linear_algebra_matrices',
+          isCorrect: false,
+          responseTimeMs: 18000,
+          mistakeType: 'dimension_mismatch',
+          difficulty: 'hard',
+        },
+      },
+      {
+        id: 'ev_4',
+        type: 'EXERCISE_ANSWERED',
+        uid: 'proj_learner_42',
+        timestamp: 4000,
+        payload: {
+          conceptId: 'linear_algebra_matrices',
+          isCorrect: false,
+          responseTimeMs: 4500,
+          mistakeType: 'dimension_mismatch',
+          difficulty: 'hard',
+        },
+      },
+    ];
+
+    const projectedState = projectEventsToState(historicalEvents, 'proj_learner_42', 'Advanced');
+    assert(projectedState.uid === 'proj_learner_42', 'projectEventsToState sets correct UID');
+    assert(projectedState.totalExercisesCompleted === 4, 'Projects exact total exercise count');
+    assert(projectedState.conceptMastery.linear_algebra_vectors.correct === 2, 'Projects vector mastery correct count');
+    assert(projectedState.conceptMastery.linear_algebra_vectors.accuracy === 1.0, 'Projects vector mastery 100% accuracy');
+    assert(projectedState.conceptMastery.linear_algebra_matrices.consecutiveIncorrect === 2, 'Projects consecutive incorrect answers');
+    assert(projectedState.learningStrain.signals.includes('repeated_errors'), 'Reconstructs repeated_errors strain signal');
+    assert(projectedState.lastActiveTimestamp === 4000, 'Reconstructs accurate lastActiveTimestamp');
+  }
+
+  // 23. Feedback Intelligence & Pedagogy Adaptation
+  console.log('\n[23] Feedback Intelligence & Pedagogy Adaptation');
+  {
+    const fbManager = getStudentStateManager('feedback_test_student');
+    const initialState = fbManager.getState();
+    assert(initialState.activePedagogy === 'scaffolded', 'Initial active pedagogy is scaffolded');
+    const initialScaffoldScore = initialState.pedagogyEffectiveness.scaffolded.score;
+
+    // Positive feedback increases strategy effectiveness score
+    fbManager.recordPedagogyFeedback('scaffolded', true, 'concept_test');
+    const boostedState = fbManager.getState();
+    assert(
+      boostedState.pedagogyEffectiveness.scaffolded.score > initialScaffoldScore,
+      'Helpful feedback increases strategy score'
+    );
+    assert(
+      boostedState.pedagogyEffectiveness.scaffolded.helpfulCount === 1,
+      'Increments helpfulCount counter'
+    );
+
+    // Negative feedback on active strategy triggers automated adaptation to best alternative
+    fbManager.recordPedagogyFeedback('scaffolded', false, 'concept_test');
+    fbManager.recordPedagogyFeedback('scaffolded', false, 'concept_test');
+    const adaptedState = fbManager.getState();
+    assert(
+      adaptedState.activePedagogy !== 'scaffolded',
+      'Unhelpful feedback on active pedagogy triggers auto-adaptation to best alternative'
+    );
+    assert(
+      adaptedState.pedagogyEffectiveness.scaffolded.unhelpfulCount === 2,
+      'Increments unhelpfulCount counter'
+    );
+
+    // Event bus delivers FEEDBACK_RECORDED to persistent listeners
+    let capturedFeedback: any = null;
+    const unsubFb = eventBus.on('FEEDBACK_RECORDED', (ev) => {
+      if (ev.payload?.messageId === 'msg_9821') {
+        capturedFeedback = ev;
+      }
+    });
+
+    eventBus.emit('FEEDBACK_RECORDED', 'feedback_test_student', {
+      messageId: 'msg_9821',
+      pedagogyUsed: 'analogies',
+      helpful: true,
+      conceptId: 'photosynthesis',
+    });
+
+    assert(capturedFeedback !== null, 'FEEDBACK_RECORDED event received by event bus subscribers');
+    unsubFb();
   }
 
   console.log(`\n========================================`);

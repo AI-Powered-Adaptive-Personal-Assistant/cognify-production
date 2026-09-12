@@ -27,10 +27,8 @@ export const FOUNDER_SUPERADMIN_EMAILS = [
 export const SUPERADMIN_EMAILS = FOUNDER_SUPERADMIN_EMAILS;
 
 export const ADMIN_EMAILS = [
-  'marwaneltaweel0@gmail.com',
   'its.alkhateeb@gmail.com',
   'esraahosni8@gmail.com',
-  'nermeenatefateffarouk@gmail.com',
   'audit.test.student2026@gmail.com',
 ];
 
