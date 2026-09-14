@@ -1,48 +1,128 @@
-# Cognify — Architecture & File Guide
+# Cognify 2.0 — Architecture & System Guide
 
-> A complete A‑to‑Z map of the project: what every file does, and how the app
-> fits together. Branded as **AI‑LA Intelligence**.
-
----
-
-## 1. What the app is
-
-An adaptive AI mentor & accessibility assistant. It personalises every answer to
-the user's cognitive level, role, field and accessibility needs, and includes a
-full accessibility suite (sign language, live captions, speech reconstruction).
-
-**Stack:** React 19 + TypeScript + Vite · Tailwind CSS · Firebase (Auth /
-Firestore / Storage) · Google Gemini · Express (local/Node) · Three.js ·
-MediaPipe · TensorFlow.js.
-
-**Architecture in one line:** a React SPA talks to `/api/gemini/*` on an Express
-backend that proxies Gemini; on static hosting (Vercel) there is no backend, so
-the frontend calls Gemini directly in the browser using `VITE_GEMINI_API_KEY`.
+> The definitive architectural map of **Cognify 2.0 (AI-LA Intelligence)**.
+> This document reflects the true, verified implementation across the server-side AI routing pipeline, unified student state engine, persistent learning event store, spatial memory, and multi-tenant security layers.
 
 ---
 
-## 2. Big‑picture data flow
+## 1. System Mission & Core Paradigm
 
+Cognify is an **Adaptive AI Mentor, Pedagogical Diagnostic Engine & Accessibility Assistant**. It does not operate as a stateless chatbot with a large prompt. Instead, it maintains a **continuous, closed-loop pedagogical state** that adapts instructional strategies in real-time based on concept mastery, prerequisite diagnosis, student feedback, and learning strain.
+
+- **Supported Product Languages:** Arabic (Egyptian / MSA), English, and French across all AI reasoning, vision, and spatial memory features.
+- **Technology Stack:**
+  - **Frontend:** React 19 + TypeScript + Vite, Tailwind CSS, Motion, Lucide Icons.
+  - **Cloud Services:** Firebase (Auth, Firestore, Storage).
+  - **Serverless AI Routing:** Node.js / Vercel Serverless (`api/` & `api/_lib/`), Express fallback (`server/`).
+  - **AI Providers:** Multi-provider fallback chain (Google Gemini, Groq, NVIDIA NIM, xAI Grok).
+  - **Edge Intelligence:** WebGL, MediaPipe, TensorFlow.js (local in-browser fingerspelling), Web Crypto API (AES-GCM 256-bit).
+
+---
+
+## 2. Architectural Data Flow & The Closed Loop
+
+```text
+Student Interaction (Chat / Exercise / Camera / Vision)
+       │
+       ▼
+1. Learning Event Store (src/lib/learningEvents.ts)
+   - Emits event on in-memory Event Bus
+   - Persists to users/{uid}/learningEvents/{eventId}
+       │
+       ▼
+2. Unified Student State Engine (src/lib/studentStateEngine.ts)
+   - Evaluates response latency & error streaks (Learning Strain)
+   - Updates concept mastery & SM-2 retention schedules
+   - Auto-tunes active pedagogy (Scaffolded, Analogies, Worked Example, Socratic, Rigorous)
+   - Persists to users/{uid}/studentState/current (with offline debounce)
+       │
+       ▼
+3. Concept Graph & Intervention Engine (src/lib/conceptGraph.ts)
+   - Detects missing prerequisites when accuracy drops
+   - Generates actionable remediation directives (e.g., review "pointers" before "dynamic_memory")
+       │
+       ▼
+4. Server-Side AI Router & Persona Engine (api/_lib/)
+   - Authenticates user via Firebase Auth ID Token (Bearer JWT in authGuard.ts)
+   - Classifies task deterministically (fast, reasoning, vision, code) in router.ts
+   - Injects real-time student state, cognitive stage, and pedagogical directives into system prompt
+   - Quality Guard sanitizes response and validates code blocks
+       │
+       ▼
+5. AI Response & Continuous Evaluation
+   - AI streams personalized explanation via SSE
+   - Student feedback (helpful/unhelpful) auto-pivots pedagogy score
+   - Pre/post evaluation scores measured via Hake's normalized gain (g)
+       ↺ (Closed Loop)
 ```
-User → React UI (src/components/*)
-     → services (src/services/gemini*.ts)
-        ├─ POST /api/gemini/*  → Express (server/*) → Google Gemini
-        └─ (no backend) → direct browser call to Gemini  (fallback)
-Auth & data → Firebase (src/lib/firebase.ts) → Cloud Firestore / Storage
-```
-
-- **Auth/profile:** `App.tsx` listens to Firebase Auth, then `onSnapshot`s the
-  user's Firestore doc (`users/{uid}`) so profile changes reflect live.
-- **Chat:** `ChatInterface` streams answers via `generateAdaptiveResponseStream`
-  (SSE), persisting messages to `users/{uid}/threads/{threadId}`.
-- **Resilience:** transient Gemini `503/429` errors auto‑retry with backoff
-  (`withRetry` server‑side, `fetchGeminiWithRetry` client‑side).
 
 ---
 
-## 3. File‑by‑file
+## 3. Server-Side AI Pipeline (`api/` & `api/_lib/`)
 
-### Root / configuration
+All AI inference in production is mediated by serverless endpoints. Client browsers **never** communicate directly with external AI provider APIs using exposed master keys.
+
+| Module | Responsibility |
+|---|---|
+| `api/gemini/chat.ts` | Primary chat endpoint. Enforces auth, IP/user rate limiting, streaming SSE response, and telemetry logging. |
+| `api/_lib/authGuard.ts` | Cryptographic verification of Firebase JWT tokens using Google public x509 certs. Enforces strict UID binding. |
+| `api/_lib/router.ts` | **Deterministic, zero-latency task classifier**. Routes requests to optimal provider/model based on intent and payload without consuming AI tokens. |
+| `api/_lib/ai.ts` | Multi-provider client abstraction (Gemini, Groq, NVIDIA, xAI), persona builder, Bloom's cognitive level integration, and student state prompt injection. |
+| `api/_lib/rateLimiter.ts` | Sliding-window in-memory rate limiter per IP and per UID to prevent API abuse and cost surges. |
+| `api/_lib/qualityGuard.ts` | Pre/post response validator. Strips hallucinated tokens, repairs unclosed markdown code blocks, and monitors latency/token usage. |
+| `api/_lib/telemetry.ts` | Structured audit logging of AI requests, latencies, provider fallbacks, and error rates. |
+
+---
+
+## 4. Student Intelligence & Adaptive State Core
+
+| File | Purpose |
+|---|---|
+| `src/lib/studentStateEngine.ts` | Canonical student state manager. Manages `cognitiveStage`, `activePedagogy`, `pedagogyEffectiveness`, `conceptMastery`, and `learningStrain`. Hydrates deterministically from event history. |
+| `src/lib/learningEvents.ts` | Persistent append-only event stream. Dispatches events across modules and records to Firestore `/users/{uid}/learningEvents/`. |
+| `src/lib/conceptGraph.ts` | Domain knowledge graph. Defines relationships, prerequisites, and root-cause diagnostic algorithms for struggling students. |
+| `src/lib/spacedRetention.ts` | SuperMemo SM-2 spaced repetition scheduler for long-term concept retention (1d, 3d, 7d, 14d...). |
+| `src/lib/evaluationEngine.ts` | Mathematical calculation of Hake's Normalized Gain ($g = \frac{Post - Pre}{100 - Pre}$) for learning efficacy measurement. |
+
+---
+
+## 5. Spatial Memory & Vision Companion (`src/lib/spatialMemoryEngine.ts`)
+
+- **Edge-First Computer Vision**: Visual detection (MediaPipe / Vision models) identifies physical objects from client video frames. Video frames are processed in volatile browser memory and **never saved to disk or cloud (0% Disk / 0% Cloud)**.
+- **Multi-Instance Identity**: Tracks objects by category and room (e.g. *Living Room TV Remote* vs *Bedroom AC Remote*) with distinct IDs and chronological movement history (last 10 surfaces).
+- **Epistemic Honesty**: If an object hasn't been observed, Cognify truthfully states it hasn't seen it rather than hallucinating a location. Fully localized in English, Arabic, and French.
+
+---
+
+## 6. Security, Privacy & Data Sovereignty
+
+- **Multi-Tenant Isolation**: Enforced at the Firestore rule layer (`firestore.rules`). Every student document `/users/{uid}` is strictly accessible only to `request.auth.uid`.
+- **Chat Thread Privacy**: `/users/{userId}/threads/{threadId}` is strictly restricted to `isOwner(userId)`. Administrative and organizational accounts **cannot** view private student conversations with the AI.
+- **Right to Erasure & Portability**: Handled via `StudentPrivacyCenter.tsx`:
+  - **Full Data Export**: One-click machine-readable JSON archive containing all user records, masteries, events, and memories.
+  - **Two-Tier Erasure**: Option to reset pedagogical memory vs. permanent cascade account deletion (Firestore documents, subcollections, Auth user, and localStorage).
+- **Client Storage Shield (`src/lib/cryptoShield.ts`)**: For user-provided developer API keys (BYOK), utilizes the browser's native **Web Crypto API (AES-GCM 256-bit with PBKDF2)** for secure async storage, and salted stream obfuscation for sync reads.
+
+---
+
+## 7. Verification & Production Build Pipeline
+
+```bash
+# Type verification (0 errors required)
+npx tsc --noEmit
+
+# Automated verification suite (354 checks: 300 unit + 54 E2E simulation)
+npm test
+
+# Production build (Vite client bundle + serverless/node bundle)
+npm run build
+```
+
+---
+
+## 8. Directory & File Reference
+
+### Root / Configuration
 | File | Purpose |
 |---|---|
 | `package.json` | Project manifest: dependencies + scripts (`dev`, `build`, `lint`, `start`). |
@@ -130,25 +210,30 @@ Auth & data → Firebase (src/lib/firebase.ts) → Cloud Firestore / Storage
 
 ---
 
-## 4. Key concepts
+## 9. Core Architectural Tenets
 
-- **Gemini fallback:** every AI service first tries the Express backend; if it
-  returns HTML/404 (static hosting) it calls Gemini directly with
-  `VITE_GEMINI_API_KEY`. Set that env var on Vercel for the deployed app.
-- **Adaptive personalisation:** the system prompt (`getSystemInstruction`)
-  injects the user's level, role, field, language and accessibility mode.
-- **Accessibility loop:** sign in (camera → text) → AI reply → sign/voice out.
-- **Scoring/growth:** assessments set `iqScore`/`level`; the Logic Sandbox
-  entrance test can only raise the score.
+- **Server-Side AI Security**: Production inference executes strictly server-side (`/api/gemini/*`). Master provider API keys never touch client JavaScript bundles.
+- **Continuous Closed-Loop Adaptation**: The system prompt dynamically injects the student's Bloom's cognitive level, active pedagogy strategy, diagnosed prerequisite gaps, and learning strain signals.
+- **Observed Mastery Over Static IQ**: Cognify measures concept accuracy, retention curves (SM-2), and normalized learning gains ($g$). It does not derive intelligence or lock students into static tracks based on an IQ score.
+- **Accessibility Integration**: Accessibility modes (sign language avatars, Motor Euphonia speech reconstruction, Vision Companion) are native first-class citizens embedded directly in the routing and telemetry layers.
 
 ---
 
-## 5. Run locally
+## 10. Development & Verification Commands
 
 ```bash
+# Install dependencies
 npm install
-# set GEMINI_API_KEY in .env (and VITE_GEMINI_API_KEY for the static path)
-npm run dev      # tsx server.ts (Express + Vite)
-npm run lint     # tsc --noEmit
-npm run build    # vite build + server bundle
+
+# Start development server (Vite + local server)
+npm run dev
+
+# Run static type verification
+npx tsc --noEmit
+
+# Execute full automated test suite (354 tests across unit & E2E)
+npm test
+
+# Build production bundle
+npm run build
 ```
