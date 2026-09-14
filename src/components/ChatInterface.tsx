@@ -20,6 +20,8 @@ import { getSpatialObjects } from "../lib/spatialMemoryEngine";
 import ChatWorkspacePanel, { StudySubject } from './chat/ChatWorkspacePanel';
 import ChatContextPanel, { ContextSource } from './chat/ChatContextPanel';
 import ChatQuickActions from './chat/ChatQuickActions';
+import { detectConversationalStrain } from '../lib/conversationalStrain';
+import RetentionWarmupBanner from './chat/RetentionWarmupBanner';
 
 // Three.js is heavy — only load the sign avatar when a deaf-mode user opens it.
 const SignAvatar3D = React.lazy(() => import("./SignAvatar3D"));
@@ -40,6 +42,8 @@ const cleanMessagesForFirestore = (newHistory: Message[]) => {
       content: m.content || "",
       timestamp: m.timestamp
     };
+    if (m.pedagogyStyle) item.pedagogyStyle = m.pedagogyStyle;
+    if (m.adaptationReason) item.adaptationReason = m.adaptationReason;
     if (m.reaction !== undefined && m.reaction !== null) {
       item.reaction = m.reaction;
     }
@@ -792,6 +796,28 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
     const finalAttachments = overrideAttachments || selectedFiles;
     if ((!finalInput.trim() && finalAttachments.length === 0) || isLoading) return;
 
+    // Detect conversational strain & auto-pivot pedagogy if student shows confusion/hesitation
+    const strain = detectConversationalStrain(finalInput, activePedagogyStyle);
+    let effectivePedagogy = activePedagogyStyle;
+    let adaptationReason: string | undefined = undefined;
+
+    if (strain.isConfused) {
+      effectivePedagogy = strain.recommendedPedagogy;
+      setActivePedagogyStyle(effectivePedagogy);
+      adaptationReason = strain.reason;
+      if (recordPedagogyFeedback) {
+        recordPedagogyFeedback(activePedagogyStyle, false, undefined, 'conversational_confusion');
+      }
+      const isAr = isArabicLocale(profile.language);
+      const isFr = profile.language === 'French';
+      const toastMsg = isAr
+        ? `تم تكييف الشرح تلقائيًا إلى أسلوب (${PEDAGOGY_STYLES.find(s => s.id === effectivePedagogy)?.labelAr || effectivePedagogy}) لتبسيط المفهوم.`
+        : isFr
+        ? `Adaptation pédagogique automatique vers (${effectivePedagogy}) pour faciliter la compréhension.`
+        : `Automatically adapted pedagogical style to (${PEDAGOGY_STYLES.find(s => s.id === effectivePedagogy)?.labelEn || effectivePedagogy}) to simplify understanding.`;
+      toast.info(toastMsg, isAr ? 'تكييف بيداغوجي ذكي' : 'Adaptive Pivot');
+    }
+
     const qualityScore = evaluateQuestionQuality(finalInput);
     
     let currentThreadId = profile.activeThreadId;
@@ -898,7 +924,7 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
       const localSpatial = profile.uid ? getSpatialObjects(profile.uid) : [];
       const calibratedProfile: UserProfile = {
         ...profile,
-        preferredPedagogyStyle: activePedagogyStyle,
+        preferredPedagogyStyle: effectivePedagogy,
         spatialMemories: profile.spatialMemories?.length ? profile.spatialMemories : localSpatial,
       };
       const stream = generateAdaptiveResponseStream(
@@ -943,7 +969,9 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
           ? '⚠️ الذكاء الاصطناعي مشغول دلوقتي. جرّب تاني بعد لحظات 🙏'
           : '⚠️ The AI is busy right now. Please try again in a moment 🙏'),
         timestamp: new Date().toISOString(),
-        attachments: streamedAttachments
+        attachments: streamedAttachments,
+        pedagogyStyle: effectivePedagogy,
+        adaptationReason: adaptationReason
       };
 
       const updatedHistory = [...newHistory, assistantMessage];
@@ -1015,6 +1043,8 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
             content: lastText,
             timestamp: new Date().toISOString(),
             attachments: streamedAttachments,
+            pedagogyStyle: effectivePedagogy,
+            adaptationReason: adaptationReason,
           };
           const kept = [...newHistory, stopped];
           setMessages(kept);
@@ -1036,6 +1066,8 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
             : '⚠️ Something went wrong connecting to the AI. Please try again 🙏'),
         timestamp: new Date().toISOString(),
         attachments: streamedAttachments,
+        pedagogyStyle: effectivePedagogy,
+        adaptationReason: adaptationReason,
       };
       const recovered = [...newHistory, errMsg];
       setMessages(recovered);
@@ -1135,15 +1167,18 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
     // Closed-loop Intelligence: emit FEEDBACK_RECORDED and adjust student state pedagogy effectiveness
     if (appliedReaction) {
       const isHelpful = appliedReaction === 'up';
+      const targetMsg = messages.find(m => m.id === messageId);
+      const pedagogyUsedForMsg = targetMsg?.pedagogyStyle || activePedagogyStyle;
+
       eventBus.emit('FEEDBACK_RECORDED', profile.uid, {
         messageId,
-        pedagogyUsed: activePedagogyStyle,
+        pedagogyUsed: pedagogyUsedForMsg,
         helpful: isHelpful,
         conceptId: activeSubjectId,
       });
 
       recordPedagogyFeedback(
-        activePedagogyStyle,
+        pedagogyUsedForMsg,
         isHelpful,
         activeSubjectId
       );
@@ -1490,6 +1525,21 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
           </div>
         ) : (
           <div className="w-full max-w-3xl space-y-10">
+            {/* Active Spaced Micro-Retrieval Warmup Banner */}
+            <RetentionWarmupBanner
+              retentionSchedules={studentState?.retentionSchedules}
+              language={profile.language}
+              onStartRefresher={(conceptId) => {
+                const isAr = isArabicLocale(profile.language);
+                const isFr = profile.language === 'French';
+                const refresherPrompt = isAr
+                  ? `أريد اختبار استرجاع سريع مدته 30 ثانية لتثبيت مفهوم (${conceptId}). اختبرني بسؤال مباشر.`
+                  : isFr
+                  ? `Je souhaite faire une réactivation rapide de 30 secondes pour consolider le concept (${conceptId}). Pose-moi une question.`
+                  : `I'd like a 30-second quick retrieval refresher to consolidate the concept (${conceptId}). Give me a quick question.`;
+                handleSubmit(undefined, refresherPrompt);
+              }}
+            />
           <AnimatePresence mode="popLayout">
             {messages.map((m) => (
               <motion.div
@@ -1592,6 +1642,37 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
                         <Bot className="w-3.5 h-3.5 text-cyan-400" />
                         <span>{localize(profile.language, 'Cognify Guidance', 'إجابة كوجنيفي الذكية')}</span>
                       </div>
+
+                      {/* Epistemic Pedagogy Badge */}
+                      {(() => {
+                        const pStyle = m.pedagogyStyle || activePedagogyStyle;
+                        const pMeta = PEDAGOGY_STYLES.find(st => st.id === pStyle);
+                        if (!pMeta) return null;
+                        const isAr = isArabicLocale(profile.language);
+                        const isFr = profile.language === 'French';
+                        const label = isAr ? pMeta.labelAr : isFr ? (pMeta.id === 'analogies' ? 'Analogies' : pMeta.id === 'technical' ? 'Technique' : pMeta.id === 'scaffolded' ? 'Pas à pas' : 'Socratique') : pMeta.labelEn;
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              title={localize(profile.language, pMeta.descriptionEn, pMeta.descriptionAr)}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-bold"
+                            >
+                              <span>{pMeta.id === 'analogies' ? '💡' : pMeta.id === 'technical' ? '⚡' : pMeta.id === 'scaffolded' ? '🪜' : '❓'}</span>
+                              <span>{label}</span>
+                            </span>
+                            {m.adaptationReason && (
+                              <span
+                                title={m.adaptationReason}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[9px] font-black uppercase tracking-wider animate-pulse"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                <span>{isAr ? 'تكييف تلقائي' : isFr ? 'Adapté' : 'Adapted'}</span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-lg border ${
                         profile.level === 'Advanced' ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' :
                         profile.level === 'Intermediate' ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' :
@@ -1644,7 +1725,19 @@ const ChatInterface = React.forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ 
                           )}
                         </div>
                       )}
-                      <MarkdownMessage content={m.content} />
+                      <MarkdownMessage 
+                        content={m.content} 
+                        onPrerequisiteClick={(prereqId) => {
+                          const isAr = isArabicLocale(profile.language);
+                          const isFr = profile.language === 'French';
+                          const text = isAr
+                            ? `أريد مراجعة المفهوم الأساسي (${prereqId}) أولاً قبل المتابعة.`
+                            : isFr
+                            ? `Je souhaite revoir le concept prérequis (${prereqId}) avant de continuer.`
+                            : `I'd like to review the prerequisite concept (${prereqId}) before moving on.`;
+                          handleSubmit(undefined, text);
+                        }}
+                      />
                     </div>
                     
                     {/* Assistant Attachments (Generated Images/Videos) */}

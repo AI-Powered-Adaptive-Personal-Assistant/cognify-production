@@ -30,6 +30,7 @@ import {
 } from '../src/lib/spatialMemoryEngine.js';
 import { localize } from '../src/lib/translations.js';
 import { canAccessView } from '../src/lib/access.js';
+import { detectConversationalStrain } from '../src/lib/conversationalStrain.js';
 import {
   getDatabaseHealth,
   getCollectionStats,
@@ -1424,6 +1425,144 @@ async function run() {
     const appCode = fs.readFileSync(appPath, 'utf8');
     assert(!appCode.includes("setCognitiveLevel(newIq < 90"), 'App.tsx onIqUpdated does not mutate cognitiveLevel based on IQ');
     assert(!appCode.includes("level: newIq < 90"), 'App.tsx onIqUpdated does not mutate profile level based on IQ');
+  }
+
+  // 30. Conversational Strain & Pedagogical Adaptation (Pillar 1)
+  console.log('\n[30] Conversational Strain & Pedagogical Adaptation (Pillar 1)');
+  {
+    // Arabic Severe Confusion Detection
+    const arStrain = detectConversationalStrain('أنا مش فاهم حاجة خالص، تلخبطت وبسطهالي خطوة بخطوة', 'socratic');
+    assert(arStrain.isConfused === true, 'Arabic confusion signals accurately detected');
+    assert(arStrain.severity === 'severe', 'Multiple confusion triggers yield severe strain');
+    assert(arStrain.recommendedPedagogy === 'scaffolded', 'Socratic mode auto-pivots to scaffolded under severe strain');
+    assert(arStrain.detectedSignals.length >= 2, 'Detects multiple distinct confusion phrases in Arabic');
+
+    // English Mild Confusion Detection
+    const enStrain = detectConversationalStrain('Can you explain simpler please?', 'technical');
+    assert(enStrain.isConfused === true, 'English simplification request detected');
+    assert(enStrain.severity === 'mild', 'Single simplification request categorized as mild');
+    assert(enStrain.recommendedPedagogy === 'analogies', 'Technical mode auto-pivots to analogies under mild strain');
+
+    // French Confusion Detection
+    const frStrain = detectConversationalStrain("Je ne comprends pas, c'est trop compliqué pour moi", 'technical');
+    assert(frStrain.isConfused === true, 'French confusion detected accurately');
+    assert(frStrain.severity === 'severe', 'Severe French confusion identified');
+    assert(frStrain.recommendedPedagogy === 'scaffolded', 'Severe French confusion pivots to scaffolded');
+
+    // Non-confused Technical Query
+    const calmQuery = detectConversationalStrain('Explain the difference between quicksort and mergesort in memory complexity.', 'technical');
+    assert(calmQuery.isConfused === false, 'Standard technical questions do not falsely trigger confusion');
+    assert(calmQuery.recommendedPedagogy === 'technical', 'Retains current pedagogy when no strain detected');
+  }
+
+  // 31. Formative 1-Click Micro-Checkups Block Delimiting & Widget Parser (Pillar 2)
+  console.log('\n[31] Formative 1-Click Micro-Checkups Block Delimiting & Widget Parser (Pillar 2)');
+  {
+    const sampleAiOutput = `
+A closure in JavaScript is the combination of a function bundled together with references to its surrounding lexical state.
+
+:::micro-check
+{
+  "question": "What does a closure retain access to?",
+  "conceptId": "closures",
+  "options": [
+    "Its outer enclosing lexical scope",
+    "Only globally declared variables",
+    "Only variables defined inside itself",
+    "The CPU registers directly"
+  ],
+  "correctIndex": 0,
+  "explanation": "A closure retains access to the variables in its outer lexical scope even after that outer function has returned."
+}
+:::
+Keep practicing closures with higher-order functions!
+`;
+
+    // Verify regex matching and clean separation of narrative vs widget JSON
+    const MICRO_CHECK_RE = /:::micro-check\s*([\s\S]*?):::/g;
+    const match = MICRO_CHECK_RE.exec(sampleAiOutput);
+    assert(match !== null, 'Regex cleanly detects :::micro-check block in AI markdown');
+    
+    const parsedData = JSON.parse(match![1].trim());
+    assert(parsedData.conceptId === 'closures', 'Parsed micro-check contains valid conceptId');
+    assert(parsedData.options.length === 4, 'Micro-check contains 4 distinct options');
+    assert(parsedData.correctIndex === 0, 'Correct index identified as 0');
+    assert(typeof parsedData.explanation === 'string', 'Explanation exists for immediate feedback');
+
+    // Simulating answering the formative check
+    const mgr = getStudentStateManager('student_formative_test', 'Intermediate');
+    mgr.recordAnswer('closures', true, 4200); // 4.2s response latency
+    const state = mgr.getState();
+    assert(state.conceptMastery['closures'] !== undefined, 'Formative check updates concept mastery record');
+    assert(state.conceptMastery['closures'].attempts === 1, 'Records 1 attempt');
+    assert(state.conceptMastery['closures'].correct === 1, 'Records 1 correct answer');
+  }
+
+  // 32. Spaced Micro-Retrieval Schedule (SM-2) & Review Due Detection (Pillar 3)
+  console.log('\n[32] Spaced Micro-Retrieval Schedule (SM-2) & Review Due Detection (Pillar 3)');
+  {
+    const initialSchedule = createInitialRetentionSchedule('binary_trees');
+    assert(initialSchedule.intervalDays === 1, 'Initial interval is 1 day');
+    assert(initialSchedule.status === 'new', 'Initial status is new');
+
+    // First successful review (repetitions 0 -> 1)
+    const review1 = calculateNextReview(initialSchedule, 5);
+    assert(review1.intervalDays === 1, 'First review reinforces interval at 1 day');
+    assert(review1.repetitions === 1, 'Repetitions incremented to 1');
+    assert(review1.status === 'learning', 'Status transitions to learning');
+
+    // Second successful review (repetitions 1 -> 2)
+    const review2 = calculateNextReview(review1, 5);
+    assert(review2.intervalDays === 3, 'Second review advances interval to 3 days');
+    assert(review2.repetitions === 2, 'Repetitions incremented to 2');
+
+    // Third successful review (repetitions 2 -> 3)
+    const review3 = calculateNextReview(review2, 5);
+    assert(review3.intervalDays === 7, 'Third review advances interval to 7 days');
+    assert(review3.repetitions === 3, 'Repetitions incremented to 3');
+
+    // Fourth successful review (repetitions >= 3)
+    const review4 = calculateNextReview(review3, 5);
+    assert(review4.intervalDays >= 14, 'Fourth review advances interval to >= 14 days');
+    assert(review4.status === 'retained', 'Status transitions to retained');
+
+    // Failed review (Quality 1 - complete struggle) -> resets interval and flags regression
+    const regressed = calculateNextReview(review4, 1);
+    assert(regressed.intervalDays === 1, 'Failed review resets interval to 1 day');
+    assert(regressed.repetitions === 0, 'Repetitions count resets to 0');
+    assert(regressed.status === 'regressed', 'Status transitions to regressed');
+
+    // Review due detection: past timestamp <= Date.now()
+    const dueSchedule = { ...review1, nextReviewDate: Date.now() - 10000 };
+    assert(dueSchedule.nextReviewDate <= Date.now(), 'Identifies schedule as due for review');
+    const futureSchedule = { ...review1, nextReviewDate: Date.now() + 86400000 };
+    assert(futureSchedule.nextReviewDate > Date.now(), 'Future schedule is not flagged as due');
+  }
+
+  // 33. Dynamic Pedagogical Strategy Efficacy Scoring & Auto-Optimization (Pillar 4)
+  console.log('\n[33] Dynamic Pedagogical Strategy Efficacy Scoring & Auto-Optimization (Pillar 4)');
+  {
+    const mgr = getStudentStateManager('student_efficacy_test', 'Basic');
+    let state = mgr.getState();
+    assert(state.pedagogyEffectiveness.scaffolded !== undefined, 'Initial pedagogy effectiveness tracks scaffolded');
+    assert(state.pedagogyEffectiveness.analogies !== undefined, 'Initial pedagogy effectiveness tracks analogies');
+
+    const initialAnalogiesScore = state.pedagogyEffectiveness.analogies.score;
+
+    // Record helpful feedback for analogies
+    mgr.recordPedagogyFeedback('analogies', true, 'variables');
+    state = mgr.getState();
+    assert(state.pedagogyEffectiveness.analogies.helpfulCount === 1, 'Helpful count incremented');
+    assert(state.pedagogyEffectiveness.analogies.score > initialAnalogiesScore, 'Helpful feedback increases strategy score');
+
+    // Record consecutive unhelpful feedback for current active pedagogy
+    const currentPedagogy = state.activePedagogy;
+    mgr.recordPedagogyFeedback(currentPedagogy, false, 'pointers', 'unhelpful_thumbs_down');
+    mgr.recordPedagogyFeedback(currentPedagogy, false, 'pointers', 'unhelpful_thumbs_down');
+    state = mgr.getState();
+
+    assert(state.pedagogyEffectiveness[currentPedagogy].unhelpfulCount === 2, 'Unhelpful count incremented to 2');
+    assert(state.activePedagogy !== currentPedagogy, 'Auto-adapts active pedagogy away from failing strategy');
   }
 
   console.log(`\n========================================`);

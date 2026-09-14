@@ -21,6 +21,8 @@ export interface Message {
     modelName: string;
     content: string;
   }[];
+  pedagogyStyle?: PedagogyStyle;
+  adaptationReason?: string;
 }
 
 export interface ChatThread {
