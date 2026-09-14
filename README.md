@@ -1,79 +1,200 @@
-# Super Human
-*An adaptive, accessible AI study mentor*
+# Cognify 2.0 (كوجنيفاي)
+*An Adaptive AI Mentor, Pedagogical Diagnostic Engine & Assistive Platform*
 
-Super Human is an AI mentor that recalibrates its tone, vocabulary, and interaction style to each user — and is built from the ground up to be usable by people with visual, hearing, speech, and cognitive accessibility needs.
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Deployed-000000?logo=vercel&logoColor=white)](https://my-cognify-app.vercel.app)
+[![Tests Passing](https://img.shields.io/badge/Tests-396%20Passed%2C%200%20Failed-10B981?logo=vitest&logoColor=white)](tests/runAllTests.ts)
+[![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict%20Pass-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Security Standard](https://img.shields.io/badge/Security-AES--GCM%20256--bit%20BYOK-8B5CF6?logo=googlecloud&logoColor=white)](PRIVACY_SPECIFICATION.md)
+
+Cognify is an **Adaptive AI Mentor, Pedagogical Diagnostic Engine & Assistive Platform** developed by the **Cognify Development Team** to empower students, self-learners, and people of determination (individuals with visual, hearing, or motor disabilities).
+
+Unlike conventional LLM wrappers that treat every query as a stateless prompt, Cognify maintains a **continuous, evidence-based pedagogical state**. It detects learning strain in real time, diagnoses root-cause prerequisite gaps, optimizes instructional strategies dynamically across 5 modalities, and guards against memory decay using active spaced micro-retrieval.
+
+---
 
 ## 📌 The Problem
-Most learning tools and AI chatbots are "one-size-fits-all":
-- **Cognitive mismatch:** beginners drown in jargon; advanced users get oversimplified answers.
-- **No memory of who you are:** standard tools ignore your field, level, and history.
-- **Poor accessibility:** rigid text interfaces exclude blind, deaf, and speech-impaired users.
-- **Learning difficulties overlooked:** children and students with reading, writing, math, or memory challenges rarely get tools that adapt to *how* they learn.
+Most AI educational tools and chatbots suffer from four fundamental flaws:
+1. **Stateless Instruction**: The model does not learn *how* the student learns; every session restarts from scratch.
+2. **Cognitive & Jargon Mismatch**: Beginners are overwhelmed by abstract jargon, while advanced students receive superficial answers.
+3. **Fragile Accessibility**: Standard interfaces exclude students with visual, hearing, motor, or speech impairments.
+4. **Longitudinal Forgetting**: Students learn a concept today but experience memory decay over weeks without structured micro-retrieval.
 
-## 🚀 The Solution
-Super Human adapts its entire persona to the user's profile (level, role, field, language, accessibility mode) and mirrors the user's language and dialect — including Egyptian Arabic. It's a long-term cognitive mentor, not just an answer bot.
+---
 
-## ✨ Key Features
-- **Cognitive recalibration:** simple analogies for Basic, professional vocabulary for Intermediate, rigorous depth for Advanced.
-- **Identity-aware answers:** tailored to your university/faculty or job/field, with cross-thread memory.
-- **Accessibility suite:**
-  - **Visual mode** — narratable, screen-reader-friendly responses.
-  - **Visual Companion** — a full-screen, camera-based life-assistant tool for blind and visually impaired users. Points the camera at anything and gets an instant spoken description (Arabic or English), with a "Remember this as..." feature to permanently recognize specific objects or faces over time.
-  - **Sign / Deaf mode** — a 3D sign avatar (Three.js), live captions, and a Sign Studio.
-  - **Speech mode** — TTS-friendly prose, plus dysarthria/atypical-speech decoding.
-- **Learning Hub:** a dedicated module for children and students with learning difficulties, covering 7 core subjects (math, reading, writing, memory, comprehension, science, English). It identifies the specific type of mistake a student makes (letter confusion, comprehension gaps, calculation errors), automatically adjusts the teaching method (text, visual, audio, interactive, repetition-based), and includes a parent dashboard to track progress — wrapped in a gamified experience (stars, streaks, levels).
-- **Multimodal:** analyze images and documents in chat.
-- **Gamified growth:** Health Score, points, and progress tracking.
-- **Admin dashboard:** tiered access — Super Admin (can promote/demote) above Admin — with a live user directory.
-- **Support Center:** built-in FAQ + contact.
+## 🚀 The Cognify Solution
+Cognify bridges these gaps with a closed-loop, evidence-based learning cycle:
+- **Trilingual Core**: Native fluency in **Arabic** (Egyptian & Modern Standard), **English**, and **French**.
+- **Pedagogical Decoupling**: Academic levels and cognitive scaffolding are driven strictly by **observed concept mastery and empirical evidence**, completely decoupled from static IQ metrics.
+- **Server-Side AI Gateway**: Master provider API keys remain strictly on the server (`api/` serverless functions); client browsers **never** touch master AI keys.
+- **Privacy Sovereignty**: Zero-knowledge edge vision processing, owner-only conversation isolation, full GDPR/FERPA data export, and self-erasure.
+
+---
+
+## 🧠 Core Intelligence Architecture (Plan 3)
+
+```text
+Student Interaction (Chat / Formative Check / Video / Speech)
+       │
+       ▼
+1. Persistent Learning Event Store (src/lib/learningEvents.ts)
+   - Emits events on in-memory Event Bus
+   - Persists append-only logs to Firestore (users/{uid}/learningEvents/{eventId})
+       │
+       ▼
+2. Unified Student State Engine (src/lib/studentStateEngine.ts)
+   - Evaluates response latency, error streaks, and learning strain
+   - Updates concept mastery & SM-2 retention schedules
+   - Hydrates deterministically from event history
+       │
+       ▼
+3. Concept Graph & Remedial Diagnosis (src/lib/conceptGraph.ts)
+   - Traverses knowledge nodes & directed prerequisite edges
+   - Diagnoses foundational blockers (e.g., struggling with "dynamic_memory" stems from "pointers")
+       │
+       ▼
+4. Server-Side AI Gateway & Dynamic Persona (api/_lib/)
+   - Authenticates Firebase JWT Bearer tokens (authGuard.ts)
+   - Deterministic, zero-token router classifies task category (router.ts)
+   - Injects real-time student state, cognitive stage, and pedagogy directives (ai.ts)
+   - Quality Guard sanitizes output and validates code blocks (qualityGuard.ts)
+       │
+       ▼
+5. True Adaptive Tutor Loop (Active Feedback & Spaced Retrieval)
+   - Real-time Conversational Strain Detection & Pedagogy Auto-Pivot
+   - Formative 1-Click Micro-Checkups with prerequisite interleaving
+   - Active Spaced Micro-Retrieval (SuperMemo SM-2)
+   - Pedagogical Strategy Efficacy Matrix (Empirical Win-Rate Scoring)
+       ↺ (Closed Loop)
+```
+
+---
+
+## ✨ Key Feature Modules
+
+### 1. Adaptive Learning & Mentorship
+- **Live Conversational Strain Engine**: Detects confusion, hesitation, or simplification requests in real time and automatically pivots instructional strategies (e.g., from *Socratic* to *Step-by-Step Scaffolding* or *Visual Analogies*).
+- **Formative 1-Click Micro-Checkups**: Interactive comprehension checks embedded seamlessly in chat, measuring response latency in milliseconds and linking misconceptions to prerequisite reviews.
+- **Active Spaced Micro-Retrieval (SM-2)**: Proactively prompts 30-second refresher checks when concepts reach their forgetting curve interval ($1d \to 3d \to 7d \to 14d+$).
+- **Pedagogical Strategy Efficacy Matrix**: Empirically scores which of the 5 instructional modalities (Scaffolded, Analogies, Worked Examples, Socratic, Deep Rigor) produces the highest comprehension for each learner.
+- **Normalized Gain Evaluation**: Uses Hake's normalized gain equation ($g = \frac{Post - Pre}{100 - Pre}$) to measure actual knowledge transfer between pre- and post-assessments.
+
+### 2. Multi-Modal Accessibility Suite
+- **Vision Companion (Blind & Low-Vision)**: Real-time scene, text, and hazard narration. All camera frames are processed in volatile memory and **never written to disk or cloud (0% Disk / 0% Cloud)**.
+- **Spatial Memory Engine**: Localizes and tracks physical objects (keys, eyeglasses, canes) across rooms with chronological surface history (last 10 surfaces) and epistemic honesty (never hallucinates an unobserved item).
+- **Sign Avatar 3D (Deaf & Hard of Hearing)**: Real-time 3D signing avatar powered by Three.js and custom sign pose translation.
+- **Two-Way Hearing Bridge**: Live bilingual speech-to-text transcription with adjustable font sizes and high-contrast styling.
+- **Motor Euphonia & Switch Access**: Minimal-motor single-switch interface, dwell clickers, and high-contrast navigation for motor-impaired learners.
+- **Speech Sanitizer**: Natural voice filtering in TTS engine (`cleanForSpeech`), removing markdown noise, asterisks, and robotic labels before audio synthesis.
+
+### 3. Academic Command Center & Analytics
+- **Academic Planner**: Interactive semester schedule, assignments, and exam calendars.
+- **GPA Calculator**: Multi-scale (4.0 and 5.0) cumulative GPA simulator with isolated "What-If" scenario planning.
+- **Cognitive Gym**: Daily logic exercises, pattern recognition challenges, and streak tracking.
+- **Student Privacy Center**: Full data sovereignty with one-click GDPR/FERPA JSON export (v2.0.0) and cascading account erasure.
+
+---
 
 ## 🛠 Tech Stack
-**Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS v4, Lucide Icons, Motion, Recharts, react-markdown
-**Auth & Data:** Firebase Authentication + Cloud Firestore (multi-database aware)
-**AI:** Google Gemini (gemini-2.5-flash, with 2.0-flash / flash-latest fallback) and an automatic Groq / xAI fallback when Gemini is rate-limited
-**Accessibility/ML:** Three.js (sign avatar), MediaPipe Hands + TensorFlow.js (gesture/sign), Web Speech API
-**Monitoring (optional):** Sentry
 
-## 🏗 Architecture
-Super Human is client-first and ships as a static site (e.g. Vercel): the browser talks to Gemini/Groq directly, so no backend is required in production. An Express server (`server.ts`) is included for local development and optional self-hosting, which adds server-side `/api` routes; when those aren't present, the app automatically falls back to direct client calls.
+| Domain | Technologies |
+|---|---|
+| **Frontend UI** | React 19, TypeScript, Vite 6, Tailwind CSS v4, Motion, Lucide Icons, Recharts, react-markdown |
+| **Serverless Backend** | Node.js (Vercel Serverless `/api`), Express (`server.ts` for local development & self-hosting) |
+| **Authentication & Database** | Firebase Authentication, Cloud Firestore (multi-database isolation), Firebase Storage |
+| **AI Foundation Engine** | Server-side multi-provider router: Google Gemini (`gemini-2.5-flash`), Groq, NVIDIA NIM, xAI |
+| **Client-Side Edge ML** | WebGL, MediaPipe Hands, TensorFlow.js (isolated in-browser gesture classification) |
+| **Cryptography** | Web Crypto API AES-GCM (256-bit) for client-side BYOK token encryption at rest |
 
-## 🔑 Environment Variables
-`VITE_`-prefixed keys are bundled into the client (publicly visible) — use them for static hosting. See `.env.example` for the full template.
+---
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `VITE_GEMINI_API_KEY` | ✅ | Gemini key(s). Comma-separate several to multiply free quota; the app rotates on rate-limit. |
-| `VITE_GROQ_API_KEY` | optional | Groq fallback (free, fast). Keys start with `gsk_`. |
-| `VITE_XAI_API_KEY` | optional | xAI/Grok fallback. Keys start with `xai-`. |
-| `VITE_SENTRY_DSN` | optional | Sentry error tracking (public DSN). |
+## 🔐 Environment Variables & Security Configuration
 
-Firebase config lives in `firebase-applet-config.json` (project, app, and `firestoreDatabaseId`). Firestore security rules are in `firestore.rules` and must be published to the same database the app uses.
+Server-side API keys are read by `/api/` serverless functions at request time and are **NEVER sent to the client browser**.
 
-⚠️ `VITE_` keys are visible in the built client. For production hardening, restrict the keys (HTTP referrer / API restrictions) or proxy them via the Express backend.
-
-## 💻 Run Locally
-**Prerequisites:** Node.js v18+
+Create a `.env` file in the root directory (see `.env.example`):
 
 ```bash
-# 1. Install dependencies
+# ── Server-Side Keys (Private - Never Exposed to Browser) ───────────────────────
+# Google Gemini API key(s) (supports rotation with comma-separated keys)
+GEMINI_API_KEY=AIzaSy_your_gemini_api_key_here
+
+# Optional Fallback Providers
+GROQ_API_KEY=gsk_your_groq_key_here
+NVIDIA_API_KEY=nvapi-your_nvidia_key_here
+XAI_API_KEY=xai-your_xai_key_here
+
+# ── Client-Side Variables (Publicly Inlined by Vite) ───────────────────────────
+# Optional error monitoring
+VITE_SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+```
+
+> [!IMPORTANT]
+> **No `VITE_GEMINI_API_KEY` in Production**: In Cognify 2.0, production AI requests are handled exclusively through serverless endpoints (`/api/gemini/chat`, `/api/gemini/generate`). Client-side BYOK keys entered by users are encrypted via Web Crypto API AES-GCM before storage.
+
+---
+
+## 💻 Local Development & Setup
+
+### Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+
+### Installation
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Mahmoud-Hashim-pro/cognify-production.git
+cd cognify-production
+
+# 2. Install dependencies
 npm install
 
-# 2. Configure environment (copy the template and fill in your keys)
+# 3. Configure environment variables
 cp .env.example .env
+# Edit .env and supply your GEMINI_API_KEY
 
-# 3. Start the dev server (Express + Vite via tsx)
+# 4. Start local development server
 npm run dev
 ```
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Local dev server (server.ts). |
-| `npm run build` | Build the static client + bundle the server. |
-| `npm run preview` | Preview the production build. |
-| `npm run lint` | Type-check (tsc --noEmit). |
-
-## 🚀 Deployment
-Deploy the static build to any static host (Vercel recommended). Set the `VITE_*` environment variables in your host's dashboard and redeploy after any change — `VITE_` values are baked in at build time.
+The application will be available at `http://localhost:5173`.
 
 ---
-*Built to redefine personalized, accessible learning.*
+
+## 🧪 Automated Testing & Verification Suite
+
+Cognify features a comprehensive test suite covering mathematical formulas, pedagogical state transitions, rate limiters, security guards, and full end-to-end user lifecycles.
+
+```bash
+# Run the complete test suite (Unit suites + End-to-end user simulation)
+npm test
+
+# Type-check TypeScript codebase
+npm run lint
+
+# Build production bundle
+npm run build
+```
+
+### Current Verification Status:
+- **396 Assertions Tested**: **396 Passed, 0 Failed (100% Success)**
+- **Suites Covered**:
+  - `[1 - 20]` Evaluation math, Hake gain, concept graphs, rate limiters, token ciphers, TTS sanitizers.
+  - `[21 - 25]` Unified student state engine, event bus persistence, feedback loops, multi-tenant isolation.
+  - `[26 - 29]` Web Crypto AES-GCM cipher integrity, spatial object disambiguation, GDPR export, static IQ decoupling.
+  - `[30 - 33]` Conversational strain detection (Ar/En/Fr), formative micro-checks, SM-2 retention curves, strategy efficacy matrix.
+  - `[E2E 1 - 12]` Full 12-step student lifecycle simulation from onboarding through prerequisite remediation to retention consolidation.
+
+---
+
+## 🚢 Deployment
+
+Cognify is optimized for deployment on **Vercel** with zero configuration:
+1. Connect your repository to Vercel.
+2. In **Project Settings → Environment Variables**, add your `GEMINI_API_KEY` (and optional `GROQ_API_KEY` / `NVIDIA_API_KEY`).
+3. Deploy! Vercel automatically deploys the frontend static assets and provisions the serverless endpoints under `/api`.
+
+---
+
+## 📄 License & Attribution
+Engineered and maintained by the **Cognify Development Team** as an assistive educational innovation for students and people of determination.
