@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Pedagogical Intervention Engine (Points 7, 26, 28)
  * Transforms diagnostic observations into actionable instructional adaptations
  * with transparent, explainable feedback for the student.
@@ -73,8 +73,8 @@ export function decideIntervention(obs: StudentObservation): InterventionDirecti
     };
   }
 
-  // Case 3: High mastery (3+ consecutive correct or > 85% accuracy)
-  if (obs.consecutiveCorrect >= 3 || obs.accuracyRate > 0.85) {
+  // Case 3: High mastery (3+ consecutive correct or > 85% accuracy with streak)
+  if (obs.consecutiveCorrect >= 3 || (obs.accuracyRate > 0.85 && obs.consecutiveCorrect >= 2)) {
     return {
       id,
       conceptId: obs.conceptId,

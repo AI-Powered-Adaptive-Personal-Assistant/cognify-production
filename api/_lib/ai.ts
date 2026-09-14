@@ -285,7 +285,7 @@ function formatCognitiveCalibration(style?: string, level?: string): string {
   return res;
 }
 
-function formatStudentStateBlock(state?: StudentStatePayload): string {
+export function formatStudentStateBlock(state?: StudentStatePayload): string {
   if (!state) return '';
   let block = '';
 
@@ -310,17 +310,36 @@ function formatStudentStateBlock(state?: StudentStatePayload): string {
   if (activeIntervention) {
     const act = activeIntervention.action || activeIntervention.recommendedAction;
     const rsn = activeIntervention.reason || activeIntervention.explanationEn || activeIntervention.promptDirective || 'Identified learning stumbling block';
-    block += `\n## ACTIVE INTERVENTION DIRECTIVE:
-- Strategy: ${activeIntervention.strategy}
-- Target Concept: ${activeIntervention.conceptId}
+    const strat = activeIntervention.strategy || 'worked_example';
+    const conceptName = activeIntervention.conceptId || 'current topic';
+
+    block += `\n## MANDATORY PEDAGOGICAL INTERVENTION (HIGHEST OVERRIDE PRIORITY)
+### ACTIVE INTERVENTION DIRECTIVE:
+- Strategy: ${strat}
+- Target Concept: ${conceptName}
 - Diagnosed Root Cause: ${rsn}
-${activeIntervention.recommendedAction ? `- Specific Remediation Action: ${activeIntervention.recommendedAction}\n` : ''}`;
+${activeIntervention.recommendedAction ? `- Specific Remediation Action: ${activeIntervention.recommendedAction}\n` : ''}${activeIntervention.promptDirective ? `- Direct Instruction: ${activeIntervention.promptDirective}\n` : ''}`;
+
     if (act === 'review_prerequisite') {
-      block += `- CRITICAL: The student is stumbling because of a foundation gap in "${activeIntervention.conceptId}". Before advancing, briefly explain and solidify this prerequisite using concrete real-world intuition.\n`;
-    } else if (activeIntervention.strategy === 'worked_example') {
-      block += `- CRITICAL: Provide a complete step-by-step worked example with thorough inline commentary before asking the student to solve on their own.\n`;
-    } else if (activeIntervention.strategy === 'analogies') {
-      block += `- CRITICAL: Anchor your explanation in an intuitive, physical real-world metaphor first before mentioning any code, math, or formal terms.\n`;
+      block += `### OPERATIONAL DIRECTIVES FOR PREREQUISITE REMEDIATION:
+1. FOUNDATION REPAIR FIRST: The student is struggling with "${conceptName}" because of an unmastered prerequisite. You MUST review and solidify this foundational prerequisite using intuitive everyday analogies before advancing to syntax.
+2. STEP-BY-STEP BRIDGE: Once the foundation is clear, explain explicitly how it directly unlocks the student's original problem.
+3. FORMATIVE MICRO-CHECK: Conclude with a 1-click micro-check block (:::micro-check\\n{...}\\n:::) to verify prerequisite understanding.\n`;
+    } else if (activeIntervention.strategy === 'worked_example' || act === 'show_worked_example') {
+      block += `### OPERATIONAL DIRECTIVES FOR WORKED EXAMPLE INTERVENTION:
+1. PHYSICAL ANALOGY FIRST: Ground the concept in an everyday physical real-world metaphor (e.g. mailboxes with house addresses vs. letters inside, numbered lockers, or postal envelopes) BEFORE presenting any code, math, or abstract definitions.
+2. NUMBERED STEP-BY-STEP WORKED EXAMPLE: Present a complete, explicit step-by-step worked example numbered sequentially (Step 1, Step 2, Step 3) demonstrating memory addresses, the address-of operator (&), and pointer dereferencing (*).
+3. INLINE MEMORY REASONING: For each step, explicitly explain why this happens in RAM/memory layout (what is stored at address 0x1000 vs. value 42).
+4. FORMATIVE MICRO-CHECK: Conclude with a 1-click micro-check block (:::micro-check\\n{...}\\n:::) testing immediate low-stakes comprehension.
+5. STRICT PROHIBITIONS: Do NOT output abstract formal definitions or dry syntax alone without physical analogy grounding. Do NOT lecture or mention failure; keep tone warm, reassuring, and patient.\n`;
+    } else if (activeIntervention.strategy === 'analogies' || act === 'show_analogy') {
+      block += `### OPERATIONAL DIRECTIVES FOR PHYSICAL ANALOGIES:
+1. ANCHOR IN EVERYDAY PHENOMENA: Use visual, tactile real-world metaphors (water pipes, road signs, library index cards) to build intuitive mental models before technical terms.
+2. CONCLUDE WITH MICRO-CHECK: Include a 1-click micro-check block to verify intuitive understanding.\n`;
+    } else if (activeIntervention.strategy === 'socratic' || act === 'advance_difficulty') {
+      block += `### OPERATIONAL DIRECTIVES FOR ADVANCED MASTERY:
+1. SOCRATIC INQUIRY: Guide the student by asking 1-2 targeted probing questions so they deduce the solution inductively. Challenge edge cases, Big-O complexity, and memory safety implications.
+2. REAL-WORLD SCALE: Connect the concept to production distributed systems or high-performance engineering.\n`;
     }
   }
 

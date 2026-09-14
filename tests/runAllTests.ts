@@ -61,6 +61,7 @@ import {
   secureRemoveKey,
   autoMigrateStorageKeys,
 } from '../src/lib/cryptoShield.js';
+import { runGoldenAdaptiveScenario } from './goldenAdaptiveScenario.js';
 
 let totalPassed = 0;
 let totalFailed = 0;
@@ -1563,6 +1564,12 @@ Keep practicing closures with higher-order functions!
 
     assert(state.pedagogyEffectiveness[currentPedagogy].unhelpfulCount === 2, 'Unhelpful count incremented to 2');
     assert(state.activePedagogy !== currentPedagogy, 'Auto-adapts active pedagogy away from failing strategy');
+  }
+
+  // 34. Golden Adaptive Scenario: Closed-Loop Pointer Remediation & Prompt Mandates
+  console.log('\n[34] Golden Adaptive Scenario: Closed-Loop Pointer Remediation & Prompt Mandates');
+  {
+    await runGoldenAdaptiveScenario(assert);
   }
 
   console.log(`\n========================================`);

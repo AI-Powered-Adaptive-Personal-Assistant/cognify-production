@@ -3,6 +3,7 @@ import { toast } from "../components/Toast";
 import { auth } from "../lib/firebase";
 import { secureLoadKeySync } from "../lib/cryptoShield";
 import { isArabicLocale } from "../lib/translations";
+import { formatStudentStateBlock } from "../../api/_lib/ai";
 
 // SECURITY: provider keys are NEVER read in the browser any more.
 //
@@ -129,7 +130,7 @@ console.info(
 );
 
 /** Compact adaptive system prompt (shared by the Groq fallback). */
-function buildPersona(profile: UserProfile): string {
+function buildPersona(profile: UserProfile, explicitStudentState?: any): string {
   let memoryBlock = '';
   if (profile.memory && profile.memory.enabled === true) {
     const goals = Array.isArray(profile.memory.learningGoals) && profile.memory.learningGoals.length
@@ -194,6 +195,9 @@ function buildPersona(profile: UserProfile): string {
 - Guide the student by asking 1-2 targeted probing questions so they deduce the solution inductively.`;
   }
 
+  const effectiveStudentState = explicitStudentState || (profile as any).studentState;
+  const stateBlock = formatStudentStateBlock(effectiveStudentState);
+
   return `You are Cognify, an adaptive AI mentor and personal assistant. Answer the most correct, useful answer calibrated to THIS user.
 - Level: ${profile.level} | Role: ${profile.role} | Field: ${profile.field}
 
@@ -206,7 +210,7 @@ function buildPersona(profile: UserProfile): string {
 - If the user asks about traveling in France or French phrases, provide practical French phrasing, cultural etiquette (always start with 'Bonjour Madame/Monsieur'), and phonetic pronunciation guides in Arabic letters and English.
 - Basic: simple, analogies, no jargon. Intermediate: normal, brief reasoning. Advanced: rigorous, direct.
 - Answer first, no filler openers. Be honest if unsure; never invent facts.
-- When explaining conceptual topics, conclude with a 1-click micro-check block (:::micro-check\n{"question": "...", "conceptId": "...", "options": [...], "correctIndex": 0, "explanation": "..."}\n:::).${memoryBlock}${cognitiveBlock}`;
+- When explaining conceptual topics, conclude with a 1-click micro-check block (:::micro-check\n{"question": "...", "conceptId": "...", "options": [...], "correctIndex": 0, "explanation": "..."}\n:::).${memoryBlock}${cognitiveBlock}${stateBlock}`;
 }
 
 // Stream a chat completion from Groq (OpenAI-compatible). Yields {text, done}.
@@ -216,6 +220,7 @@ async function* generateGroqStream(
   history: Message[],
   apiKey: string,
   signal?: AbortSignal,
+  studentState?: any
 ) {
   const mapped = history
     .filter((m) => m.id !== "welcome" && m.content?.trim())
@@ -225,7 +230,7 @@ async function* generateGroqStream(
   const lastM = mapped[mapped.length - 1];
   const dedupedMapped = (lastM?.role === "user" && lastM.content === message) ? mapped.slice(0, -1) : mapped;
   const messages = [
-    { role: "system", content: buildPersona(profile) },
+    { role: "system", content: buildPersona(profile, studentState) },
     ...dedupedMapped,
     { role: "user", content: message },
   ];
@@ -580,7 +585,8 @@ async function* generateAdaptiveResponseStreamClient(
   history: Message[],
   attachments: { name: string, type: string, data: string }[] = [],
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  studentState?: any
 ) {
   const otherThreadsSummary = profile.chatThreads
     ?.filter(t => t.id !== profile.activeThreadId)
@@ -701,7 +707,7 @@ ${profile.accessibilityMode === 'Visual' ? `- USER IS BLIND. Describing an image
   4) Be concise — a few short sentences, not a paragraph. No flowery/"vivid" language, no markdown, no tables — this is read aloud by TTS. CRITICAL: Never output markdown asterisks (**), bullet points, or section headings (do NOT write "**Hazards:** None" or "**Visible Text:** None" or "**Scene Description:**"). Speak directly in natural conversational prose.` : ''}
 ${(profile.accessibilityMode === 'Vocal-Deaf' || profile.accessibilityMode === 'Sign-Only') ? `- User is deaf. Short, visual sentences.` : ''}
 ${profile.accessibilityMode === 'Speech' ? `- Output is read aloud by TTS: smooth speakable prose, no tables, no symbol clutter, no markdown noise.` : ''}
-${studentMemoryBlock}${spatialMemoryBlock}${cognitiveBlock}
+${studentMemoryBlock}${spatialMemoryBlock}${cognitiveBlock}${formatStudentStateBlock(studentState || (profile as any).studentState)}
 ## THREAD MEMORY
 Summaries of the user's other threads are below. Use them ONLY if the user explicitly asks about past conversations. Otherwise ignore them completely — never volunteer them, especially not on greetings.
 ${otherThreadsSummary}
@@ -880,9 +886,9 @@ export async function* generateAdaptiveResponseStream(
   // Once we know there's no backend, go straight to the direct path.
   if (backendUp === false) {
     const apiKey = geminiPrimaryKey();
-    if (apiKey) { yield* generateAdaptiveResponseStreamClient(message, profile, history, attachments, apiKey, signal); return; }
+    if (apiKey) { yield* generateAdaptiveResponseStreamClient(message, profile, history, attachments, apiKey, signal, studentState); return; }
     const groqKey = groqPrimaryKey();
-    if (groqKey) { yield* generateGroqStream(message, profile, history, groqKey, signal); return; }
+    if (groqKey) { yield* generateGroqStream(message, profile, history, groqKey, signal, studentState); return; }
     const ar = isArabicLocale(profile.language);
     yield { text: ar ? '⚠️ مفيش مفتاح ذكاء اصطناعي متفعّل.' : '⚠️ No AI key configured.', done: true, error: true };
     return;
@@ -919,13 +925,13 @@ export async function* generateAdaptiveResponseStream(
       }
       const apiKey = geminiPrimaryKey();
       if (apiKey) {
-        yield* generateAdaptiveResponseStreamClient(message, profile, history, attachments, apiKey, signal);
+        yield* generateAdaptiveResponseStreamClient(message, profile, history, attachments, apiKey, signal, studentState);
         return;
       }
       // No Gemini key configured → use Groq directly if available.
       const groqKey = groqPrimaryKey();
       if (groqKey) {
-        yield* generateGroqStream(message, profile, history, groqKey, signal);
+        yield* generateGroqStream(message, profile, history, groqKey, signal, studentState);
         return;
       }
 
