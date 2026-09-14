@@ -579,6 +579,22 @@ export default function MotorEuphoniaView({ profile, onSendMessage }: MotorEupho
 
   // Scientific Eye-Tracking Architecture Modal State
   const [showScientificArchitectureModal, setShowScientificArchitectureModal] = useState(false);
+  // Live ref mirror so the 30-120Hz tracker callback can check "is the debug
+  // modal open" without closing over stale state or forcing itself into the
+  // dependency array of the camera-start effect.
+  const showScientificArchitectureModalRef = useRef(false);
+  useEffect(() => {
+    showScientificArchitectureModalRef.current = showScientificArchitectureModal;
+  }, [showScientificArchitectureModal]);
+  // Caps how often gaze/gesture updates trigger a React re-render of this
+  // (large) tree. The tracker drives this at display refresh rate — up to
+  // 120Hz on some laptops — but the dwell timer is 1200ms and the cursor only
+  // needs to look smooth, not be reconciled every physical frame. 30Hz is
+  // imperceptible for both and roughly halves-to-quarters render volume on
+  // 60-120Hz screens, which matters most on exactly the low-end devices this
+  // feature targets.
+  const lastPointerRenderRef = useRef(0);
+  const POINTER_RENDER_INTERVAL_MS = 33;
   const [eyeLiveMetrics, setEyeLiveMetrics] = useState<any>(null);
 
   // Refs
@@ -965,9 +981,15 @@ export default function MotorEuphoniaView({ profile, onSendMessage }: MotorEupho
       videoRef.current,
       {
         onPointerMove: (pos, prog) => {
+          // checkHoverTarget drives dwell/latch logic and must run every
+          // frame regardless of render throttling — only the setState calls
+          // (which trigger a full re-render of this component) are capped.
+          checkHoverTargetRef.current(pos);
+          const now = Date.now();
+          if (now - lastPointerRenderRef.current < POINTER_RENDER_INTERVAL_MS) return;
+          lastPointerRenderRef.current = now;
           setCursorPos(pos);
           setDwellProgress(prog);
-          checkHoverTargetRef.current(pos);
         },
         onDwellComplete: (targetId) => {
           // The tracker sets its own hover target from magnetic snapping, so
@@ -977,9 +999,18 @@ export default function MotorEuphoniaView({ profile, onSendMessage }: MotorEupho
           handleCardTriggerRef.current(targetId);
         },
         onGesture: (gesture) => {
-          setGestureState(gesture);
-          if (gesture.metrics) {
-            setEyeLiveMetrics(gesture.metrics);
+          // gestureState/eyeLiveMetrics only feed the scientific-architecture
+          // debug modal (checked below) — everything else that reacts to a
+          // gesture (blink-click, smile-click, scanning) reads `gesture`
+          // directly, not React state. Skipping the setState calls while that
+          // modal is closed removes two full-tree re-renders per gesture
+          // event (roughly video framerate) for the overwhelming majority of
+          // a session.
+          if (showScientificArchitectureModalRef.current) {
+            setGestureState(gesture);
+            if (gesture.metrics) {
+              setEyeLiveMetrics(gesture.metrics);
+            }
           }
           const hovered = hoveredCardIdRef.current;
           // While scanning, every gesture is just "press the switch".
