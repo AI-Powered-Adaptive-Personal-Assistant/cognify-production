@@ -24,6 +24,7 @@ import {
   Globe,
   MapPin,
   Search,
+  BookOpen,
 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, cleanDataForFirestore } from '../lib/firebase';
@@ -106,6 +107,10 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
   const [labelInput, setLabelInput] = useState('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Read Mode: focuses the AI purely on reading visible text aloud
+  // (prescriptions, bills, labels, price tags) instead of describing the scene.
+  const [readMode, setReadMode] = useState(false);
 
   // Supported languages: Arabic, English, French
   const [companionLang, setCompanionLang] = useState<'ar' | 'en' | 'fr'>(() => {
@@ -314,12 +319,17 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
 
     setLastSnapshot(frame);
     setStatus('analyzing');
-    const waitingMsg =
-      targetLang === 'ar'
-        ? 'بحلل اللي قدامك في الكاميرا...'
+    const waitingMsg = readMode
+      ? targetLang === 'ar'
+        ? 'بقرا النص اللي قدامك...'
         : targetLang === 'fr'
-        ? "J'analyse ce qui se trouve devant vous..."
-        : "Analyzing what's in front of you...";
+        ? 'Je lis le texte devant vous...'
+        : 'Reading the text in front of you...'
+      : targetLang === 'ar'
+      ? 'بحلل اللي قدامك في الكاميرا...'
+      : targetLang === 'fr'
+      ? "J'analyse ce qui se trouve devant vous..."
+      : "Analyzing what's in front of you...";
     setAnnounce(waitingMsg);
 
     const knownContext = memories.length
@@ -330,7 +340,17 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
       : '';
 
     let prompt = '';
-    if (targetLang === 'ar') {
+    if (readMode) {
+      // Read Mode: ignore the scene entirely, just read out any visible text
+      // verbatim and in order (prescriptions, bills, labels, price tags, receipts).
+      if (targetLang === 'ar') {
+        prompt = `أنت تساعد شخص كفيف بقراءة نص مكتوب أمامه بالكاميرا (ممكن يكون روشتة، فاتورة كهربا أو غاز، ملصق منتج، سعر، إيصال، أو أي ورقة). اقرأ كل النص المكتوب في الصورة بالترتيب وبوضوح، كلمة بكلمة كما هو، من غير أي وصف للمشهد أو الأشياء حواليه. لو النص فيه أرقام أو تواريخ أو مبالغ، اقرأها بوضوح وبالترتيب الصحيح. لو مفيش نص واضح في الصورة، قول له بلطف "مفيش نص واضح قدامك دلوقتي، حاول تقرب الكاميرا أكتر." لا تستخدم أي عناوين أو ماركداون أو كلمة "النص المكتوب:" كعنوان.${knownContext}`;
+      } else if (targetLang === 'fr') {
+        prompt = `Vous aidez une personne aveugle à lire un texte visible par sa caméra (ordonnance, facture, étiquette, prix, reçu, ou tout document). Lisez tout le texte visible dans l'image, dans l'ordre, mot pour mot, sans décrire la scène ni les objets environnants. Lisez clairement les chiffres, dates et montants dans leur ordre exact. S'il n'y a pas de texte clair, dites poliment "Aucun texte clair détecté, essayez de rapprocher la caméra." N'utilisez aucun titre, markdown, ou libellé robotique.${knownContext}`;
+      } else {
+        prompt = `You are helping a blind person read text visible through their camera (a prescription, a utility bill, a product label, a price tag, a receipt, or any document). Read out ALL the visible text in the image, in order, word for word, without describing the scene or surrounding objects. Read any numbers, dates, or amounts clearly and in their correct order. If there is no clear text visible, gently say "No clear text detected right now, try moving the camera closer." Do NOT use any headings, markdown, or robotic labels like "Text:".${knownContext}`;
+      }
+    } else if (targetLang === 'ar') {
       prompt = `أنت رفيق بشري يتحدث بصوته لشخص كفيف عبر الكاميرا. تحدث فوراً بلغة عربية عامية سهلة ومباشرة كأنك صديق يقف بجانبه وينظر أمامه: ادخل في الموضوع فوراً بدون أي مقدمات أو عناوين أو ماركداون. ابدأ مباشرة بجملة تطمينية سلسة إذا لم تكن هناك مخاطر، مثلاً: "مفيش أخطار حواليك، قدامك..." ثم صف الأشخاص والأشياء والأسطح والنصوص المكتوبة بشكل طبيعي وتلقائي جداً. لا تذكر كلمات مثل "المخاطر" أو "النصوص المكتوبة" أو "وصف المشهد" كعناوين، ولا تستخدم نجوم الماركداون أو الشرطات نهائياً.${knownContext}`;
     } else if (targetLang === 'fr') {
       prompt = `Vous êtes un compagnon humain chaleureux qui parle directement à voix haute à une personne aveugle à travers sa caméra. Parlez immédiatement dans un langage oral fluide, naturel et bienveillant, comme un ami à ses côtés : allez droit au but sans titres de section ni balises markdown. S'il n'y a aucun danger, commencez directement par rassurer la personne (ex. "Aucun danger autour de vous, devant vous se trouve..."). Décrivez les personnes, objets, surfaces et textes visibles de façon fluide et naturelle. N'utilisez AUCUN astérisque (**), tiret ou en-tête robotique.${knownContext}`;
@@ -594,8 +614,27 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             </button>
           </div>
 
-          {/* Right Utilities: Spatial Memory + Flip Camera + Fullscreen */}
+          {/* Right Utilities: Read Mode + Spatial Memory + Flip Camera + Fullscreen */}
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={() => setReadMode((prev) => !prev)}
+              aria-pressed={readMode}
+              aria-label={t('Read Mode', 'وضع القراءة', 'Mode lecture')}
+              className={`px-3 py-2 rounded-2xl backdrop-blur-xl border shadow-lg active:scale-95 transition-all flex items-center gap-1.5 text-xs font-bold ${
+                readMode
+                  ? 'bg-amber-500/90 border-amber-300 text-black'
+                  : 'bg-black/75 border-amber-500/40 text-white hover:bg-black/90'
+              }`}
+              title={t(
+                'Read Mode: read prescriptions, bills, labels aloud',
+                'وضع القراءة: اقرأ الروشتة، الفاتورة، الملصقات بصوت عالي',
+                'Mode lecture : lire les ordonnances, factures, étiquettes'
+              )}
+            >
+              <BookOpen className={`w-4 h-4 shrink-0 ${readMode ? 'text-black' : 'text-amber-400'}`} />
+              <span className="hidden md:inline">{t('Read Mode', 'اقرأ لي', 'Mode lecture')}</span>
+            </button>
+
             <button
               onClick={() => {
                 setShowSpatialMemory(true);
@@ -684,10 +723,12 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
               disabled={status === 'analyzing' || status === 'starting-camera'}
               className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-emerald-950/60 border border-emerald-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              <Camera className="w-5 h-5 shrink-0" />
+              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
               <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>🇪🇬 ماذا أمامي؟</span>
-                <span className="text-[10px] font-normal opacity-90">وصف فوري بالصوت</span>
+                <span>{readMode ? '🇪🇬 اقرأ اللي قدامي' : '🇪🇬 ماذا أمامي؟'}</span>
+                <span className="text-[10px] font-normal opacity-90">
+                  {readMode ? 'قراءة نص بالصوت' : 'وصف فوري بالصوت'}
+                </span>
               </div>
             </button>
 
@@ -696,10 +737,12 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
               disabled={status === 'analyzing' || status === 'starting-camera'}
               className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-indigo-950/60 border border-primary/40 active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              <Camera className="w-5 h-5 shrink-0" />
+              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
               <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>🇬🇧 What is here?</span>
-                <span className="text-[10px] font-normal opacity-90">Spoken English</span>
+                <span>{readMode ? '🇬🇧 Read this for me' : '🇬🇧 What is here?'}</span>
+                <span className="text-[10px] font-normal opacity-90">
+                  {readMode ? 'Spoken text reading' : 'Spoken English'}
+                </span>
               </div>
             </button>
 
@@ -708,10 +751,12 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
               disabled={status === 'analyzing' || status === 'starting-camera'}
               className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-700 hover:from-blue-500 hover:to-cyan-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-blue-950/60 border border-blue-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              <Camera className="w-5 h-5 shrink-0" />
+              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
               <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>🇫🇷 Que vois-je ?</span>
-                <span className="text-[10px] font-normal opacity-90">Vocal en français</span>
+                <span>{readMode ? '🇫🇷 Lisez ceci' : '🇫🇷 Que vois-je ?'}</span>
+                <span className="text-[10px] font-normal opacity-90">
+                  {readMode ? 'Lecture du texte' : 'Vocal en français'}
+                </span>
               </div>
             </button>
           </div>
