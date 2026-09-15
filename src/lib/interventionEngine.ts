@@ -30,6 +30,7 @@ export interface StudentObservation {
   studentPreferredStyle?: string;
   prerequisiteDiagnosis?: PrerequisiteDiagnosis;
   repeatedMistakeType?: string;
+  bestObservedStrategy?: InterventionStrategy;
 }
 
 /**
@@ -58,18 +59,25 @@ export function decideIntervention(obs: StudentObservation): InterventionDirecti
 
   // Case 2: High struggle (2+ consecutive errors or < 50% accuracy)
   if (obs.consecutiveIncorrect >= 2 || (obs.accuracyRate < 0.5 && obs.consecutiveIncorrect >= 1)) {
-    // Balance preference vs performance (Point 28): even if student preferred 'technical',
-    // struggle mandates worked examples and visual analogies.
+    // Balance preference vs performance (Point 28): struggle mandates worked examples and visual analogies.
+    // If a proven best strategy was observed for this concept, respect it; otherwise default to worked_example.
+    const chosenStrategy = obs.bestObservedStrategy || 'worked_example';
     return {
       id,
       conceptId: obs.conceptId,
-      strategy: 'worked_example',
-      titleEn: 'Step-by-Step Worked Example',
-      titleAr: 'مثال توضيحي محلول خطوة بخطوة',
-      explanationEn: "I switched to a step-by-step worked example with an everyday analogy to relieve cognitive load.",
-      explanationAr: "قمنا بالانتقال إلى مثال محلول خطوة بخطوة مع تشبيه عملي لتسهيل استيعاب الفكرة وتخفيف العبء الذهني.",
-      promptDirective: `The student is currently struggling with this concept. Provide a concrete, step-by-step WORKED EXAMPLE with a clear physical analogy. Do not jump to abstract code or theorems.`,
-      recommendedAction: 'show_worked_example',
+      strategy: chosenStrategy,
+      titleEn: chosenStrategy === 'analogies' ? 'Intuitive Analogy & Mental Model' : 'Step-by-Step Worked Example',
+      titleAr: chosenStrategy === 'analogies' ? 'تشبيه عملي ونموذج ذهني مبسط' : 'مثال توضيحي محلول خطوة بخطوة',
+      explanationEn: chosenStrategy === 'analogies'
+        ? "I switched to an intuitive real-world analogy to rebuild understanding from first principles."
+        : "I switched to a step-by-step worked example with an everyday analogy to relieve cognitive load.",
+      explanationAr: chosenStrategy === 'analogies'
+        ? "قمنا بالانتقال إلى تشبيه عملي من الحياة اليومية لإعادة بناء الفهم من المبادئ الأولى."
+        : "قمنا بالانتقال إلى مثال محلول خطوة بخطوة مع تشبيه عملي لتسهيل استيعاب الفكرة وتخفيف العبء الذهني.",
+      promptDirective: chosenStrategy === 'analogies'
+        ? `The student is struggling with this concept. Ground the explanation in an everyday physical real-world ANALOGY before syntax.`
+        : `The student is currently struggling with this concept. Provide a concrete, step-by-step WORKED EXAMPLE with a clear physical analogy. Do not jump to abstract code or theorems.`,
+      recommendedAction: chosenStrategy === 'analogies' ? 'show_analogy' : 'show_worked_example',
     };
   }
 

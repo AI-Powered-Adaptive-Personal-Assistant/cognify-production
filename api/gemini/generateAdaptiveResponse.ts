@@ -61,6 +61,8 @@ export default async function handler(req: any, res: any) {
     res.status(200).json({
       result: validated.text,
       warnings: validated.warnings,
+      category,
+      activePedagogy: effectiveState?.activePedagogy || 'scaffolded',
     });
   } catch (err) {
     console.error('[api] generateAdaptiveResponse:', err);

@@ -62,6 +62,7 @@ import {
   autoMigrateStorageKeys,
 } from '../src/lib/cryptoShield.js';
 import { runGoldenAdaptiveScenario } from './goldenAdaptiveScenario.js';
+import { runRealAdaptiveApiVerification } from './realAdaptiveApiVerification.js';
 
 let totalPassed = 0;
 let totalFailed = 0;
@@ -1570,6 +1571,12 @@ Keep practicing closures with higher-order functions!
   console.log('\n[34] Golden Adaptive Scenario: Closed-Loop Pointer Remediation & Prompt Mandates');
   {
     await runGoldenAdaptiveScenario(assert);
+  }
+
+  // 35. Phase 2A: Real Serverless Adaptive API & Closed-Loop Outcome Tracking
+  console.log('\n[35] Phase 2A: Real Serverless Adaptive API & Closed-Loop Outcome Tracking');
+  {
+    await runRealAdaptiveApiVerification(assert);
   }
 
   console.log(`\n========================================`);

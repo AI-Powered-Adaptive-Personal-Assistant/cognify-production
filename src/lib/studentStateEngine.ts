@@ -32,6 +32,26 @@ export { isGuestUser };
  */
 export const studentStateDoc = (uid: string) => doc(db, 'users', uid, 'studentState', 'current');
 
+export interface StrategyOutcomeMetrics {
+  attempts: number;
+  successes: number;
+  rate: number; // successes / attempts (0.0 to 1.0)
+  lastUsed: number;
+}
+
+export interface InterventionOutcomeRecord {
+  id: string;
+  interventionId: string;
+  conceptId: string;
+  strategy: PedagogyStrategy;
+  outcome: 'success' | 'struggle' | 'in_progress';
+  preInterventionAccuracy: number;
+  postInterventionAccuracy: number;
+  attemptsUnderIntervention: number;
+  triggeredTimestamp: number;
+  resolvedTimestamp?: number;
+}
+
 export interface ConceptMasteryRecord {
   conceptId: string;
   attempts: number;
@@ -42,6 +62,8 @@ export interface ConceptMasteryRecord {
   consecutiveIncorrect: number;
   lastTested: number;
   mistakeTypes: string[];
+  strategyOutcomes?: Partial<Record<PedagogyStrategy, StrategyOutcomeMetrics>>;
+  bestObservedStrategy?: PedagogyStrategy;
 }
 
 export type StruggleSignalType = 'high_response_latency' | 'repeated_errors' | 'prerequisite_gap' | 'frequent_hints';
@@ -75,6 +97,7 @@ export interface StudentState {
   conceptMastery: Record<string, ConceptMasteryRecord>;
   retentionSchedules: Record<string, RetentionSchedule>;
   activeInterventions: Record<string, InterventionDirective>;
+  interventionHistory?: InterventionOutcomeRecord[];
   totalExercisesCompleted: number;
   lastActiveTimestamp: number;
 }
@@ -103,6 +126,7 @@ export function createInitialStudentState(uid: string, level?: string): StudentS
     conceptMastery: {},
     retentionSchedules: {},
     activeInterventions: {},
+    interventionHistory: [],
     totalExercisesCompleted: 0,
     lastActiveTimestamp: Date.now(),
   };
@@ -342,8 +366,12 @@ export class StudentStateManager {
         consecutiveIncorrect: 0,
         lastTested: now,
         mistakeTypes: [],
+        strategyOutcomes: {},
       };
     }
+
+    const activeInt = this.state.activeInterventions[cleanConcept];
+    const previousAccuracy = record.attempts > 0 ? record.accuracy : 0;
 
     record.attempts += 1;
     record.lastTested = now;
@@ -364,6 +392,50 @@ export class StudentStateManager {
     }
 
     record.accuracy = Math.round((record.correct / record.attempts) * 100) / 100;
+
+    // Outcome tracking: evaluate effectiveness of any active intervention on this concept
+    if (activeInt && activeInt.strategy) {
+      const strat = activeInt.strategy as PedagogyStrategy;
+      record.strategyOutcomes = record.strategyOutcomes || {};
+      const currentMetric: StrategyOutcomeMetrics = record.strategyOutcomes[strat] || {
+        attempts: 0,
+        successes: 0,
+        rate: 0,
+        lastUsed: now,
+      };
+
+      currentMetric.attempts += 1;
+      if (isCorrect) {
+        currentMetric.successes += 1;
+      }
+      currentMetric.rate = Math.round((currentMetric.successes / currentMetric.attempts) * 100) / 100;
+      currentMetric.lastUsed = now;
+      record.strategyOutcomes[strat] = currentMetric;
+
+      // Update best observed strategy if success rate is solid (>= 0.6 with at least 1 attempt)
+      if (currentMetric.attempts >= 1 && currentMetric.rate >= 0.6) {
+        record.bestObservedStrategy = strat;
+      }
+
+      // Record intervention outcome entry
+      this.state.interventionHistory = this.state.interventionHistory || [];
+      const outcomeRecord: InterventionOutcomeRecord = {
+        id: `out_${now}_${Math.random().toString(36).substring(2, 6)}`,
+        interventionId: activeInt.id,
+        conceptId: cleanConcept,
+        strategy: strat,
+        outcome: isCorrect ? 'success' : 'struggle',
+        preInterventionAccuracy: previousAccuracy,
+        postInterventionAccuracy: record.accuracy,
+        attemptsUnderIntervention: currentMetric.attempts,
+        triggeredTimestamp: activeInt.id.startsWith('int_')
+          ? parseInt(activeInt.id.split('_')[1], 10) || now
+          : now,
+        resolvedTimestamp: isCorrect ? now : undefined,
+      };
+      this.state.interventionHistory.push(outcomeRecord);
+    }
+
     this.state.conceptMastery[cleanConcept] = record;
     this.state.totalExercisesCompleted += 1;
     this.state.lastActiveTimestamp = now;
@@ -408,6 +480,7 @@ export class StudentStateManager {
       avgResponseTimeMs: responseTimeMs,
       prerequisiteDiagnosis: prereqDiagnosis,
       repeatedMistakeType: mistakeType,
+      bestObservedStrategy: record.bestObservedStrategy,
     });
 
     this.state.activeInterventions[cleanConcept] = intervention;
@@ -543,6 +616,7 @@ export class StudentStateManager {
         cognitiveLoadScore: s.cognitiveLoadScore,
         totalExercisesCompleted: s.totalExercisesCompleted,
         lastActiveTimestamp: s.lastActiveTimestamp,
+        interventionHistory: s.interventionHistory || [],
       };
 
       for (const cid of touched) {
@@ -574,29 +648,30 @@ export class StudentStateManager {
     }
   }
 
-  private saveToLocalCache() {
+  /**
+   * Reads from local localStorage cache for instant sub-millisecond cold start.
+   */
+  private loadFromLocalCache(uid: string): StudentState | null {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}${this.state.uid}`,
-          JSON.stringify(this.state)
-        );
-      }
-    } catch (e) {
-      console.warn('[StudentStateManager] Local cache save failed:', e);
+      const raw = localStorage.getItem(`cognify_student_state_${uid}`);
+      if (!raw) return null;
+      return JSON.parse(raw) as StudentState;
+    } catch {
+      return null;
     }
   }
 
-  private loadFromLocalCache(uid: string): StudentState | null {
+  /**
+   * Writes authoritative state to synchronous device localStorage.
+   */
+  private saveToLocalCache() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     try {
-      if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem(`${STORAGE_PREFIX}${uid}`);
-        if (raw) return JSON.parse(raw);
-      }
-    } catch {
-      // Ignore
+      localStorage.setItem(`cognify_student_state_${this.state.uid}`, JSON.stringify(this.state));
+    } catch (e) {
+      console.warn('[StudentStateManager] Local cache save failed:', e);
     }
-    return null;
   }
 }
 
@@ -614,8 +689,8 @@ export function getStudentStateManager(uid: string, level?: string): StudentStat
 }
 
 /**
- * Deterministically projects an immutable sequence of LearningEvents into a canonical StudentState.
- * Guarantees that student state can always be reconstructed, audited, or verified from historical evidence.
+ * Event-sourced pure state projector.
+ * Derives authoritative canonical state by sequentially folding learning events.
  */
 export function projectEventsToState(
   events: LearningEvent[],
@@ -652,8 +727,12 @@ export function projectEventsToState(
           consecutiveIncorrect: 0,
           lastTested: event.timestamp,
           mistakeTypes: [],
+          strategyOutcomes: {},
         };
       }
+
+      const activeInt = state.activeInterventions[cleanConcept];
+      const previousAccuracy = record.attempts > 0 ? record.accuracy : 0;
 
       record.attempts += 1;
       record.lastTested = event.timestamp;
@@ -674,6 +753,48 @@ export function projectEventsToState(
       }
 
       record.accuracy = Math.round((record.correct / record.attempts) * 100) / 100;
+
+      // Outcome tracking: evaluate effectiveness of any active intervention on this concept
+      if (activeInt && activeInt.strategy) {
+        const strat = activeInt.strategy as PedagogyStrategy;
+        record.strategyOutcomes = record.strategyOutcomes || {};
+        const currentMetric: StrategyOutcomeMetrics = record.strategyOutcomes[strat] || {
+          attempts: 0,
+          successes: 0,
+          rate: 0,
+          lastUsed: event.timestamp,
+        };
+
+        currentMetric.attempts += 1;
+        if (isCorrect) {
+          currentMetric.successes += 1;
+        }
+        currentMetric.rate = Math.round((currentMetric.successes / currentMetric.attempts) * 100) / 100;
+        currentMetric.lastUsed = event.timestamp;
+        record.strategyOutcomes[strat] = currentMetric;
+
+        if (currentMetric.attempts >= 1 && currentMetric.rate >= 0.6) {
+          record.bestObservedStrategy = strat;
+        }
+
+        state.interventionHistory = state.interventionHistory || [];
+        const outcomeRecord: InterventionOutcomeRecord = {
+          id: `out_${event.timestamp}_${Math.random().toString(36).substring(2, 6)}`,
+          interventionId: activeInt.id,
+          conceptId: cleanConcept,
+          strategy: strat,
+          outcome: isCorrect ? 'success' : 'struggle',
+          preInterventionAccuracy: previousAccuracy,
+          postInterventionAccuracy: record.accuracy,
+          attemptsUnderIntervention: currentMetric.attempts,
+          triggeredTimestamp: activeInt.id.startsWith('int_')
+            ? parseInt(activeInt.id.split('_')[1], 10) || event.timestamp
+            : event.timestamp,
+          resolvedTimestamp: isCorrect ? event.timestamp : undefined,
+        };
+        state.interventionHistory.push(outcomeRecord);
+      }
+
       state.conceptMastery[cleanConcept] = record;
       state.totalExercisesCompleted += 1;
       state.lastActiveTimestamp = event.timestamp;
@@ -708,6 +829,7 @@ export function projectEventsToState(
         avgResponseTimeMs: responseTimeMs,
         prerequisiteDiagnosis: prereqDiagnosis,
         repeatedMistakeType: mistakeType,
+        bestObservedStrategy: record.bestObservedStrategy,
       });
 
       state.activeInterventions[cleanConcept] = intervention;
