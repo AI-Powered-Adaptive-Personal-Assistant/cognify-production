@@ -716,49 +716,55 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
 
         {/* Floating Bottom Action Dock */}
         <div className="pointer-events-auto space-y-2.5 max-w-2xl mx-auto w-full">
-          {/* Three Primary Action Choices: Arabic, English, French */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-            <button
-              onClick={() => describeScene('ar')}
-              disabled={status === 'analyzing' || status === 'starting-camera'}
-              className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-emerald-950/60 border border-emerald-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
-              <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>{readMode ? '🇪🇬 اقرأ اللي قدامي' : '🇪🇬 ماذا أمامي؟'}</span>
-                <span className="text-[10px] font-normal opacity-90">
-                  {readMode ? 'قراءة نص بالصوت' : 'وصف فوري بالصوت'}
-                </span>
-              </div>
-            </button>
+          {/* Primary Action: only the button matching the currently selected language shows */}
+          <div className="grid grid-cols-1 gap-2 sm:gap-2.5">
+            {companionLang === 'ar' && (
+              <button
+                onClick={() => describeScene('ar')}
+                disabled={status === 'analyzing' || status === 'starting-camera'}
+                className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-emerald-950/60 border border-emerald-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
+                <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
+                  <span>{readMode ? '🇪🇬 اقرأ اللي قدامي' : '🇪🇬 ماذا أمامي؟'}</span>
+                  <span className="text-[10px] font-normal opacity-90">
+                    {readMode ? 'قراءة نص بالصوت' : 'وصف فوري بالصوت'}
+                  </span>
+                </div>
+              </button>
+            )}
 
-            <button
-              onClick={() => describeScene('en')}
-              disabled={status === 'analyzing' || status === 'starting-camera'}
-              className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-indigo-950/60 border border-primary/40 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
-              <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>{readMode ? '🇬🇧 Read this for me' : '🇬🇧 What is here?'}</span>
-                <span className="text-[10px] font-normal opacity-90">
-                  {readMode ? 'Spoken text reading' : 'Spoken English'}
-                </span>
-              </div>
-            </button>
+            {companionLang === 'en' && (
+              <button
+                onClick={() => describeScene('en')}
+                disabled={status === 'analyzing' || status === 'starting-camera'}
+                className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-indigo-950/60 border border-primary/40 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
+                <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
+                  <span>{readMode ? '🇬🇧 Read this for me' : '🇬🇧 What is here?'}</span>
+                  <span className="text-[10px] font-normal opacity-90">
+                    {readMode ? 'Spoken text reading' : 'Spoken English'}
+                  </span>
+                </div>
+              </button>
+            )}
 
-            <button
-              onClick={() => describeScene('fr')}
-              disabled={status === 'analyzing' || status === 'starting-camera'}
-              className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-700 hover:from-blue-500 hover:to-cyan-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-blue-950/60 border border-blue-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
-              <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
-                <span>{readMode ? '🇫🇷 Lisez ceci' : '🇫🇷 Que vois-je ?'}</span>
-                <span className="text-[10px] font-normal opacity-90">
-                  {readMode ? 'Lecture du texte' : 'Vocal en français'}
-                </span>
-              </div>
-            </button>
+            {companionLang === 'fr' && (
+              <button
+                onClick={() => describeScene('fr')}
+                disabled={status === 'analyzing' || status === 'starting-camera'}
+                className="w-full min-h-[58px] sm:min-h-[66px] rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-700 hover:from-blue-500 hover:to-cyan-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-2xl shadow-blue-950/60 border border-blue-400/40 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {readMode ? <BookOpen className="w-5 h-5 shrink-0" /> : <Camera className="w-5 h-5 shrink-0" />}
+                <div className="flex flex-col items-start sm:items-center text-start sm:text-center leading-tight">
+                  <span>{readMode ? '🇫🇷 Lisez ceci' : '🇫🇷 Que vois-je ?'}</span>
+                  <span className="text-[10px] font-normal opacity-90">
+                    {readMode ? 'Lecture du texte' : 'Vocal en français'}
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Secondary Controls Bar */}
