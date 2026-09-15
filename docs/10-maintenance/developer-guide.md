@@ -20,11 +20,13 @@ npm run dev
 # 3. Type-check entire codebase in strict mode
 npm run lint    # Or npx tsc --noEmit
 
-# 4. Execute the comprehensive automated test suite (520 assertions)
+# 4. Execute the comprehensive automated test suite (666 assertions)
 npm test
 
-# 5. Execute only the Golden Adaptive Scenario verification
-npm run test:golden
+# 5. Execute individual verification suites
+npm run test:golden         # Golden Adaptive Scenario
+npm run test:api-adaptive   # Real Serverless Adaptive API & Outcome Tracking
+npm run test:e2e            # Full End-to-End User Lifecycle
 
 # 6. Verify production build compilation
 npm run build
@@ -34,13 +36,14 @@ npm run build
 
 ## 2. Automated Test Suite Architecture [VERIFIED]
 
-Cognify enforces a mandatory quality gate consisting of **520 automated assertions across 3 suites with 100% pass rate requirement**:
+Cognify enforces a mandatory quality gate consisting of **666 automated assertions across 4 suites with 100% pass rate requirement**:
 
 ```mermaid
 graph TD
-    TestRunner["npm test"] --> S1["1. Core System Suites [1-34]<br>(tests/runAllTests.ts)<br>404 Assertions"]
+    TestRunner["npm test"] --> S1["1. Core System Suites [1-35]<br>(tests/runAllTests.ts)<br>477 Assertions"]
     TestRunner --> S2["2. Golden Adaptive Scenario<br>(tests/goldenAdaptiveScenario.ts)<br>62 Assertions"]
-    TestRunner --> S3["3. End-to-End User Lifecycle<br>(tests/e2eFullUserCycle.ts)<br>54 Assertions"]
+    TestRunner --> S3["3. Real Adaptive API Suite<br>(tests/realAdaptiveApiVerification.ts)<br>73 Assertions"]
+    TestRunner --> S4["4. End-to-End User Lifecycle<br>(tests/e2eFullUserCycle.ts)<br>54 Assertions"]
 
     S1 --> S1A["Math: GPA, Hake Gain, SM-2 Retention"]
     S1 --> S1B["State: Event Sourcing, Dirty Tracking, Dot-Path"]
@@ -50,16 +53,21 @@ graph TD
     S2 --> S2B["AI Prompt Mandates & Conformance"]
     S2 --> S2C["Micro-Check Recovery & Socratic Promotion"]
 
-    S3 --> S3A["New Student Onboarding & Session Auth"]
-    S3 --> S3B["Rate Limiter & QualityGuard Repair"]
-    S3 --> S3C["PWA Manifest & Zero-Knowledge Spec"]
+    S3 --> S3A["Serverless Handler & Auth Guard"]
+    S3 --> S3B["Deterministic Router (Strain >= 0.8)"]
+    S3 --> S3C["Outcome Tracking & Strategy Win-Rate"]
+
+    S4 --> S4A["New Student Onboarding & Session Auth"]
+    S4 --> S4B["Rate Limiter & QualityGuard Repair"]
+    S4 --> S4C["PWA Manifest & Zero-Knowledge Spec"]
 ```
 
 ### Passing Summary:
-- **Suite 1 to 34 (`runAllTests.ts`)**: 404 passed, 0 failed.
+- **Suite 1 to 35 (`runAllTests.ts`)**: 477 passed, 0 failed.
 - **Golden Adaptive Scenario (`goldenAdaptiveScenario.ts`)**: 62 passed, 0 failed.
+- **Real Adaptive API Suite (`realAdaptiveApiVerification.ts`)**: 73 passed, 0 failed.
 - **End-to-End Full User Cycle (`e2eFullUserCycle.ts`)**: 54 passed, 0 failed.
-- **Total Assertions**: **520 passing / 0 failing (100% Success Rate)**.
+- **Total Assertions**: **666 passing / 0 failing (100% Success Rate)**.
 
 ---
 

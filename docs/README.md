@@ -49,7 +49,7 @@ docs/
 │
 ├── 10-maintenance/
 │   ├── troubleshooting.md          # Diagnostics for benign errors, hardware, quotas, failover
-│   └── developer-guide.md          # Quickstart commands, the 520 automated tests, 5 core laws
+│   └── developer-guide.md          # Quickstart commands, the 666 automated tests, 5 core laws
 │
 └── 11-technical-articles/
     ├── system-deep-dive.md         # Full engineering whitepaper on Cognify 2.0

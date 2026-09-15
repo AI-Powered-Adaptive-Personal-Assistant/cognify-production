@@ -2,7 +2,7 @@
 *An Adaptive AI Mentor, Pedagogical Diagnostic Engine & Assistive Platform*
 
 [![Vercel Deployment](https://img.shields.io/badge/Vercel-Deployed-000000?logo=vercel&logoColor=white)](https://my-cognify-app.vercel.app)
-[![Tests Passing](https://img.shields.io/badge/Tests-396%20Passed%2C%200%20Failed-10B981?logo=vitest&logoColor=white)](tests/runAllTests.ts)
+[![Tests Passing](https://img.shields.io/badge/Tests-666%20Passed%2C%200%20Failed-10B981?logo=vitest&logoColor=white)](tests/runAllTests.ts)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict%20Pass-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Security Standard](https://img.shields.io/badge/Security-AES--GCM%20256--bit%20BYOK-8B5CF6?logo=googlecloud&logoColor=white)](PRIVACY_SPECIFICATION.md)
 
@@ -177,13 +177,12 @@ npm run build
 ```
 
 ### Current Verification Status:
-- **396 Assertions Tested**: **396 Passed, 0 Failed (100% Success)**
-- **Suites Covered**:
-  - `[1 - 20]` Evaluation math, Hake gain, concept graphs, rate limiters, token ciphers, TTS sanitizers.
-  - `[21 - 25]` Unified student state engine, event bus persistence, feedback loops, multi-tenant isolation.
-  - `[26 - 29]` Web Crypto AES-GCM cipher integrity, spatial object disambiguation, GDPR export, static IQ decoupling.
-  - `[30 - 33]` Conversational strain detection (Ar/En/Fr), formative micro-checks, SM-2 retention curves, strategy efficacy matrix.
-  - `[E2E 1 - 12]` Full 12-step student lifecycle simulation from onboarding through prerequisite remediation to retention consolidation.
+- **666 Assertions Tested**: **666 Passed, 0 Failed (100% Success)**
+- **Suites Covered (4 Deterministic Verification Suites)**:
+  - `[1 - 35]` Core automated test suite (`tests/runAllTests.ts`, **477 assertions**): Evaluation math, Hake gain, concept graphs, rate limiters, token ciphers, TTS sanitizers, unified student state engine, event bus persistence, feedback loops, multi-tenant spatial isolation, Web Crypto AES-GCM cipher integrity, GDPR export/delete cascade, conversational strain detection (Ar/En/Fr), SM-2 retention curves, Golden Scenario, and Phase 2A real adaptive API verification.
+  - `[Golden Scenario]` End-to-end pointer remediation and prompt directive mandates (`tests/goldenAdaptiveScenario.ts`, **62 assertions**).
+  - `[Phase 2A Real Adaptive API]` Closed-loop serverless API verification with outcome tracking and strategy effectiveness (`tests/realAdaptiveApiVerification.ts`, **73 assertions**).
+  - `[E2E 1 - 12]` Full 12-step student lifecycle simulation from onboarding through prerequisite remediation to retention consolidation (`tests/e2eFullUserCycle.ts`, **54 assertions**).
 
 ---
 
