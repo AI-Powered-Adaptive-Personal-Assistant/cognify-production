@@ -140,6 +140,7 @@ export interface StudentStatePayload {
 }
 
 export interface Profile {
+  uid?: string;
   level?: string; role?: string; field?: string; language?: string;
   accessibilityMode?: string;
   chatThreads?: { id?: string; title?: string; lastMessageSnippet?: string }[];
