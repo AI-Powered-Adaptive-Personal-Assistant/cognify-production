@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Medical-Grade Steve Saling & Google Project Euphonia Eye-Gaze & Head Tracker.
  * v3 — Upgraded with:
  *   1. Anti-Tremor Deadband Filter (absorbs micro-tremors and camera noise).
@@ -1553,11 +1553,20 @@ export class FacialHeadTracker {
       ctx.font = 'bold 7.5px monospace';
       ctx.fillText('EYE PIP (Part 3)', pipX + 5, pipY + 10);
 
-      // Eye contour bounding box
-      const eyeMinX = Math.min(...LEFT_EYE_CONTOUR.map((i) => landmarks[i]?.x || 0.5));
-      const eyeMaxX = Math.max(...LEFT_EYE_CONTOUR.map((i) => landmarks[i]?.x || 0.5));
-      const eyeMinY = Math.min(...LEFT_EYE_CONTOUR.map((i) => landmarks[i]?.y || 0.5));
-      const eyeMaxY = Math.max(...LEFT_EYE_CONTOUR.map((i) => landmarks[i]?.y || 0.5));
+      // Eye contour bounding box. Plain loop instead of four separate
+      // `Math.min(...arr.map(...))` passes: those allocated four throwaway
+      // arrays and did four full traversals of the contour EVERY overlay
+      // frame (30-60Hz) purely to draw the debug eye PIP.
+      let eyeMinX = 1, eyeMaxX = 0, eyeMinY = 1, eyeMaxY = 0;
+      for (const i of LEFT_EYE_CONTOUR) {
+        const p = landmarks[i];
+        const x = p?.x ?? 0.5;
+        const y = p?.y ?? 0.5;
+        if (x < eyeMinX) eyeMinX = x;
+        if (x > eyeMaxX) eyeMaxX = x;
+        if (y < eyeMinY) eyeMinY = y;
+        if (y > eyeMaxY) eyeMaxY = y;
+      }
       const spanX = eyeMaxX - eyeMinX || 0.01;
       const spanY = eyeMaxY - eyeMinY || 0.01;
 
