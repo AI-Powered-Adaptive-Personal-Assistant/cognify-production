@@ -49,6 +49,10 @@ type Status = 'idle' | 'starting-camera' | 'ready' | 'analyzing' | 'camera-denie
 
 const isArabicLang = (lang?: string) => isArabicLocale(lang);
 
+// Remembers the user's chosen Visual Companion language across visits,
+// so it's only asked once instead of defaulting to English every time.
+const COMPANION_LANG_STORAGE_KEY = 'cognify_vision_companion_lang';
+
 /**
  * Sanitizes visual descriptions for both on-screen display and spoken output:
  * - Strips robotic labels like "**Hazards:** None", "**Visible Text:** None", "**Scene Description:**"
@@ -114,10 +118,32 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
 
   // Supported languages: Arabic, English, French
   const [companionLang, setCompanionLang] = useState<'ar' | 'en' | 'fr'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem(COMPANION_LANG_STORAGE_KEY);
+      if (saved === 'ar' || saved === 'en' || saved === 'fr') return saved;
+    }
     if (isArabicLang(profile?.language)) return 'ar';
     if (profile?.language === 'French' || (profile?.language as unknown as string) === 'fr') return 'fr';
-    return 'en';
+    return 'ar'; // neutral placeholder while the first-launch picker is shown
   });
+
+  // Has the user ever picked a language before (this device)? If not, show
+  // the first-launch language picker instead of silently defaulting to English.
+  const [langChosen, setLangChosen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.localStorage.getItem(COMPANION_LANG_STORAGE_KEY)) {
+      return true;
+    }
+    if (isArabicLang(profile?.language) || profile?.language === 'French') return true;
+    return false;
+  });
+
+  const chooseLang = useCallback((lang: 'ar' | 'en' | 'fr') => {
+    setCompanionLang(lang);
+    setLangChosen(true);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(COMPANION_LANG_STORAGE_KEY, lang);
+    }
+  }, []);
 
   // Spatial memory drawer state
   const [showSpatialMemory, setShowSpatialMemory] = useState(false);
@@ -572,7 +598,7 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
           <div className="flex items-center bg-black/75 backdrop-blur-xl border border-white/20 p-1 rounded-2xl shadow-2xl">
             <button
               onClick={() => {
-                setCompanionLang('ar');
+                chooseLang('ar');
                 toast.success('تم اختيار اللغة العربية 🇪🇬');
               }}
               className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1 transition-all ${
@@ -586,7 +612,7 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             </button>
             <button
               onClick={() => {
-                setCompanionLang('en');
+                chooseLang('en');
                 toast.success('English language selected 🇬🇧');
               }}
               className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1 transition-all ${
@@ -600,7 +626,7 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             </button>
             <button
               onClick={() => {
-                setCompanionLang('fr');
+                chooseLang('fr');
                 toast.success('Langue française sélectionnée 🇫🇷');
               }}
               className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1 transition-all ${
@@ -801,6 +827,70 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
           </div>
         </div>
       </div>
+
+      {/* First-Launch Language Picker — shown once until a language is chosen */}
+      <AnimatePresence>
+        {!langChosen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="lang-picker-title"
+              initial={{ y: 30, opacity: 0, scale: 0.95 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 30, opacity: 0 }}
+              className="w-full max-w-sm bg-slate-900 rounded-3xl p-6 space-y-5 border border-slate-800 shadow-2xl text-white text-center"
+            >
+              <div className="space-y-1.5">
+                <h3 id="lang-picker-title" className="font-black text-lg">
+                  اختر لغتك / Choose your language / Choisissez votre langue
+                </h3>
+                <p className="text-xs text-slate-400">
+                  هتقدر تغيرها في أي وقت من فوق · You can change it anytime · Vous pouvez la changer à tout moment
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                <button
+                  onClick={() => {
+                    chooseLang('ar');
+                    toast.success('تم اختيار اللغة العربية 🇪🇬');
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-base flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] transition-all"
+                >
+                  <span>🇪🇬</span>
+                  <span>العربية</span>
+                </button>
+                <button
+                  onClick={() => {
+                    chooseLang('en');
+                    toast.success('English language selected 🇬🇧');
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 text-white font-black text-base flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] transition-all"
+                >
+                  <span>🇬🇧</span>
+                  <span>English</span>
+                </button>
+                <button
+                  onClick={() => {
+                    chooseLang('fr');
+                    toast.success('Langue française sélectionnée 🇫🇷');
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-700 hover:from-blue-500 hover:to-cyan-600 text-white font-black text-base flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] transition-all"
+                >
+                  <span>🇫🇷</span>
+                  <span>Français</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* "Remember this as..." Dialog Modal */}
       <AnimatePresence>
