@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Camera,
   Volume2,
+  VolumeX,
   BookmarkPlus,
   Loader2,
   AlertTriangle,
@@ -115,6 +116,10 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
   // Read Mode: focuses the AI purely on reading visible text aloud
   // (prescriptions, bills, labels, price tags) instead of describing the scene.
   const [readMode, setReadMode] = useState(false);
+
+  // Tracks whether the description is currently being spoken aloud, so the
+  // same button can toggle between "play" and "stop" the voice.
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Supported languages: Arabic, English, French
   const [companionLang, setCompanionLang] = useState<'ar' | 'en' | 'fr'>(() => {
@@ -423,11 +428,17 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
       const voiceLang = targetLang === 'ar' ? 'Arabic' : targetLang === 'fr' ? 'French' : 'English';
       setTimeout(() => {
         speak(cleaned, voiceLang, {
+          onStart: () => setIsSpeaking(true),
+          onEnd: () => setIsSpeaking(false),
           onError: () => {
+            setIsSpeaking(false);
             // Chrome speech resume recovery
             if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
               window.speechSynthesis.resume();
-              setTimeout(() => speak(cleaned, voiceLang), 120);
+              setTimeout(() => speak(cleaned, voiceLang, {
+                onStart: () => setIsSpeaking(true),
+                onEnd: () => setIsSpeaking(false),
+              }), 120);
             }
           },
         });
@@ -534,8 +545,31 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
     const voiceLang = companionLang === 'ar' ? 'Arabic' : companionLang === 'fr' ? 'French' : 'English';
     const cleaned = cleanVisionDescription(lastDescription, companionLang);
     setTimeout(() => {
-      speak(cleaned, voiceLang);
+      speak(cleaned, voiceLang, {
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
     }, 60);
+  };
+
+  // Same button toggles play/stop: if currently speaking, stop it; otherwise play it.
+  const toggleSpeech = () => {
+    if (isSpeaking) {
+      cancelSpeech();
+      setIsSpeaking(false);
+    } else {
+      replaySpeech();
+    }
+  };
+
+  // Dismisses the current description card (and stops any speech) so the
+  // user can immediately take a fresh description without it lingering.
+  const closeDescription = () => {
+    cancelSpeech();
+    setIsSpeaking(false);
+    setLastDescription('');
+    setLastSnapshot(null);
   };
 
   return (
@@ -718,19 +752,38 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="w-full max-w-2xl bg-black/80 backdrop-blur-2xl border border-white/20 text-white rounded-3xl p-4 sm:p-5 shadow-2xl pointer-events-auto space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-2xl bg-black/80 backdrop-blur-2xl border border-white/20 text-white rounded-3xl p-4 sm:p-5 shadow-2xl pointer-events-auto space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar"
             >
-              <div className="flex items-center justify-between text-xs text-slate-300 border-b border-white/10 pb-2">
+              <button
+                onClick={closeDescription}
+                aria-label={t('Close', 'إغلاق', 'Fermer')}
+                title={companionLang === 'ar' ? 'إغلاق ووصف جديد' : companionLang === 'fr' ? 'Fermer et faire une nouvelle description' : 'Close and take a new description'}
+                className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 hover:bg-red-500 border-2 border-black text-white flex items-center justify-center shadow-xl transition-colors z-10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center justify-between text-xs text-slate-300 border-b border-white/10 pb-2 pr-2">
                 <span className="font-bold flex items-center gap-1.5 text-primary">
                   <Sparkles className="w-4 h-4" />
                   {companionLang === 'ar' ? 'الوصف الصوتي التلقائي' : 'Spoken Audio Description'}
                 </span>
                 <button
-                  onClick={replaySpeech}
-                  className="flex items-center gap-1.5 text-white hover:text-emerald-400 font-bold text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors"
+                  onClick={toggleSpeech}
+                  className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1.5 rounded-xl transition-colors ${
+                    isSpeaking
+                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300'
+                      : 'bg-white/10 hover:bg-white/20 text-white hover:text-emerald-400'
+                  }`}
                 >
-                  <Volume2 className="w-4 h-4 text-emerald-400" />
-                  {companionLang === 'ar' ? 'إعادة النطق الصوتي' : 'Repeat Aloud'}
+                  {isSpeaking ? (
+                    <VolumeX className="w-4 h-4 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-emerald-400" />
+                  )}
+                  {isSpeaking
+                    ? (companionLang === 'ar' ? 'وقف الصوت' : companionLang === 'fr' ? 'Muet' : 'Stop')
+                    : (companionLang === 'ar' ? 'إعادة النطق الصوتي' : companionLang === 'fr' ? 'Répéter' : 'Repeat Aloud')}
                 </button>
               </div>
               <p className="text-sm sm:text-base text-slate-100 leading-relaxed font-medium">
@@ -739,6 +792,7 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             </motion.div>
           )}
         </div>
+
 
         {/* Floating Bottom Action Dock */}
         <div className="pointer-events-auto space-y-2.5 max-w-2xl mx-auto w-full">
@@ -796,12 +850,24 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
           {/* Secondary Controls Bar */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={replaySpeech}
+              onClick={toggleSpeech}
               disabled={!lastDescription}
-              className="flex-1 min-h-[46px] rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-xl border border-white/20 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 shadow-lg active:scale-95"
+              className={`flex-1 min-h-[46px] rounded-xl backdrop-blur-xl border text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 shadow-lg active:scale-95 ${
+                isSpeaking
+                  ? 'bg-red-500/30 hover:bg-red-500/40 border-red-400/40'
+                  : 'bg-black/70 hover:bg-black/90 border-white/20'
+              }`}
             >
-              <Volume2 className="w-4 h-4 text-emerald-400" />
-              <span>{companionLang === 'ar' ? 'كرر بالصوت' : companionLang === 'fr' ? 'Répéter' : 'Repeat aloud'}</span>
+              {isSpeaking ? (
+                <VolumeX className="w-4 h-4 text-red-300" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+              )}
+              <span>
+                {isSpeaking
+                  ? (companionLang === 'ar' ? 'وقف الصوت' : companionLang === 'fr' ? 'Muet' : 'Stop voice')
+                  : (companionLang === 'ar' ? 'كرر بالصوت' : companionLang === 'fr' ? 'Répéter' : 'Repeat aloud')}
+              </span>
             </button>
 
             <button
