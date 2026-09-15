@@ -752,7 +752,7 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="relative w-full max-w-2xl"
+              className="relative w-full max-w-2xl pointer-events-auto"
             >
               <button
                 onClick={closeDescription}
