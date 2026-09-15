@@ -752,45 +752,48 @@ export default function VisionCompanionView({ profile, setProfile }: VisionCompa
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="relative w-full max-w-2xl bg-black/80 backdrop-blur-2xl border border-white/20 text-white rounded-3xl p-4 sm:p-5 shadow-2xl pointer-events-auto space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-2xl"
             >
               <button
                 onClick={closeDescription}
                 aria-label={t('Close', 'إغلاق', 'Fermer')}
                 title={companionLang === 'ar' ? 'إغلاق ووصف جديد' : companionLang === 'fr' ? 'Fermer et faire une nouvelle description' : 'Close and take a new description'}
-                className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 hover:bg-red-500 border-2 border-black text-white flex items-center justify-center shadow-xl transition-colors z-10"
+                className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-red-500 hover:bg-red-400 border-2 border-white text-white flex items-center justify-center shadow-xl transition-colors z-20"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" strokeWidth={3} />
               </button>
 
-              <div className="flex items-center justify-between text-xs text-slate-300 border-b border-white/10 pb-2 pr-2">
-                <span className="font-bold flex items-center gap-1.5 text-primary">
-                  <Sparkles className="w-4 h-4" />
-                  {companionLang === 'ar' ? 'الوصف الصوتي التلقائي' : 'Spoken Audio Description'}
-                </span>
-                <button
-                  onClick={toggleSpeech}
-                  className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1.5 rounded-xl transition-colors ${
-                    isSpeaking
-                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300'
-                      : 'bg-white/10 hover:bg-white/20 text-white hover:text-emerald-400'
-                  }`}
-                >
-                  {isSpeaking ? (
-                    <VolumeX className="w-4 h-4 text-red-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-emerald-400" />
-                  )}
-                  {isSpeaking
-                    ? (companionLang === 'ar' ? 'وقف الصوت' : companionLang === 'fr' ? 'Muet' : 'Stop')
-                    : (companionLang === 'ar' ? 'إعادة النطق الصوتي' : companionLang === 'fr' ? 'Répéter' : 'Repeat Aloud')}
-                </button>
+              <div className="bg-black/80 backdrop-blur-2xl border border-white/20 text-white rounded-3xl p-4 sm:p-5 shadow-2xl pointer-events-auto space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between text-xs text-slate-300 border-b border-white/10 pb-2 pr-2">
+                  <span className="font-bold flex items-center gap-1.5 text-primary">
+                    <Sparkles className="w-4 h-4" />
+                    {companionLang === 'ar' ? 'الوصف الصوتي التلقائي' : 'Spoken Audio Description'}
+                  </span>
+                  <button
+                    onClick={toggleSpeech}
+                    className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1.5 rounded-xl transition-colors ${
+                      isSpeaking
+                        ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300'
+                        : 'bg-white/10 hover:bg-white/20 text-white hover:text-emerald-400'
+                    }`}
+                  >
+                    {isSpeaking ? (
+                      <VolumeX className="w-4 h-4 text-red-400" />
+                    ) : (
+                      <Volume2 className="w-4 h-4 text-emerald-400" />
+                    )}
+                    {isSpeaking
+                      ? (companionLang === 'ar' ? 'وقف الصوت' : companionLang === 'fr' ? 'Muet' : 'Stop')
+                      : (companionLang === 'ar' ? 'إعادة النطق الصوتي' : companionLang === 'fr' ? 'Répéter' : 'Repeat Aloud')}
+                  </button>
+                </div>
+                <p className="text-sm sm:text-base text-slate-100 leading-relaxed font-medium">
+                  {lastDescription}
+                </p>
               </div>
-              <p className="text-sm sm:text-base text-slate-100 leading-relaxed font-medium">
-                {lastDescription}
-              </p>
             </motion.div>
           )}
+
         </div>
 
 
