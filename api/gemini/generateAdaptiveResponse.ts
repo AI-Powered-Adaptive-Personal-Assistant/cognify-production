@@ -19,7 +19,7 @@ export default async function handler(req: any, res: any) {
     // Phase 1.1 — deterministic router with student state awareness.
     const effectiveState = studentState || profile?.studentState;
     const category = classifyRequest(message, safeAttachments, effectiveState);
-    const system = buildPersona(profile, threadsSummary(profile), effectiveState);
+    const system = buildPersona(profile, threadsSummary(profile), effectiveState, message);
 
     let rawOutput = '';
 
@@ -58,11 +58,20 @@ export default async function handler(req: any, res: any) {
       cognitiveStage: profile?.level,
     });
 
+    const plm = effectiveState?.personalLearningModel;
+    const plmSummary = plm ? {
+      primaryPreferredStrategy: plm.primaryPreferredStrategy,
+      secondaryPreferredStrategy: plm.secondaryPreferredStrategy,
+      trackedConceptsCount: Object.keys(plm.conceptProfiles || {}).length,
+      proactiveDirectivesCount: (plm.proactiveRemediationDirectives || []).length,
+    } : undefined;
+
     res.status(200).json({
       result: validated.text,
       warnings: validated.warnings,
       category,
       activePedagogy: effectiveState?.activePedagogy || 'scaffolded',
+      plmSummary,
     });
   } catch (err) {
     console.error('[api] generateAdaptiveResponse:', err);

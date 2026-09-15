@@ -187,7 +187,7 @@ export default async function handler(req: any, res: any) {
     // Phase 1.1 — deterministic router with student state awareness.
     const effectiveState = studentState || profile?.studentState;
     const category = classifyRequest(message, safeAttachments, effectiveState);
-    const system = buildPersona(profile, threadsSummary(profile), effectiveState);
+    const system = buildPersona(profile, threadsSummary(profile), effectiveState, message);
     let full = '';
 
     try {

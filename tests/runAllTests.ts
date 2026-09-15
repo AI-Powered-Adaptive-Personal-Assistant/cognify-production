@@ -63,6 +63,7 @@ import {
 } from '../src/lib/cryptoShield.js';
 import { runGoldenAdaptiveScenario } from './goldenAdaptiveScenario.js';
 import { runRealAdaptiveApiVerification } from './realAdaptiveApiVerification.js';
+import { runPersonalLearningModelVerification } from './personalLearningModelVerification.js';
 
 let totalPassed = 0;
 let totalFailed = 0;
@@ -1577,6 +1578,12 @@ Keep practicing closures with higher-order functions!
   console.log('\n[35] Phase 2A: Real Serverless Adaptive API & Closed-Loop Outcome Tracking');
   {
     await runRealAdaptiveApiVerification(assert);
+  }
+
+  // 36. Phase 2B: Personal Learning Model (PLM) & Proactive Personalization
+  console.log('\n[36] Phase 2B: Personal Learning Model (PLM) & Proactive Personalization');
+  {
+    await runPersonalLearningModelVerification(assert);
   }
 
   console.log(`\n========================================`);

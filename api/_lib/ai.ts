@@ -137,6 +137,7 @@ export interface StudentStatePayload {
     attempts: number;
     confidence: number;
   }>;
+  personalLearningModel?: any;
 }
 
 export interface Profile {
@@ -347,17 +348,102 @@ ${activeIntervention.recommendedAction ? `- Specific Remediation Action: ${activ
   return block;
 }
 
+export function formatPersonalLearningModelBlock(plm?: any, userMessage = ''): string {
+  if (!plm || typeof plm !== 'object') return '';
+
+  const conceptProfiles: Record<string, any> = plm.conceptProfiles || {};
+  const hasProfiles = Object.keys(conceptProfiles).length > 0;
+  const primaryStrategy = plm.primaryPreferredStrategy;
+  const secondaryStrategy = plm.secondaryPreferredStrategy;
+
+  if (!hasProfiles && !primaryStrategy) return '';
+
+  let block = '\n## PERSONAL LEARNING MODEL: LONGITUDINAL STUDENT INTELLIGENCE\n';
+  block += '- This model consolidates long-term empirical learning evidence for this specific student.\n';
+
+  if (primaryStrategy) {
+    block += `- Learner's Dominant Empirical Modality: ${String(primaryStrategy).toUpperCase()}${secondaryStrategy ? ` (Secondary: ${String(secondaryStrategy).toUpperCase()})` : ''}\n`;
+  }
+
+  // Detect if the incoming user query mentions any tracked concepts
+  const normalizedMsg = (userMessage || '').toLowerCase().replace(/[-_]/g, ' ');
+  let matchedConceptKey: string | null = null;
+  let matchedProfile: any = null;
+
+  for (const [k, prof] of Object.entries(conceptProfiles)) {
+    const cleanK = k.toLowerCase().replace(/[-_]/g, ' ');
+    const nameEn = (prof?.conceptNameEn || '').toLowerCase();
+    const nameAr = (prof?.conceptNameAr || '').toLowerCase();
+
+    if (
+      (cleanK && normalizedMsg.includes(cleanK)) ||
+      (nameEn && normalizedMsg.includes(nameEn)) ||
+      (nameAr && normalizedMsg.includes(nameAr))
+    ) {
+      matchedConceptKey = k;
+      matchedProfile = prof;
+      break;
+    }
+  }
+
+  if (matchedProfile) {
+    const masteryPct = Math.round((matchedProfile.mastery || 0) * 100);
+    const confPct = Math.round((matchedProfile.confidence || 0) * 100);
+    const latency = matchedProfile.latencyProfile || 'medium';
+    const bestStrat = matchedProfile.bestStrategy || 'worked_example';
+    const secStrat = matchedProfile.secondBestStrategy;
+    const commonErr = matchedProfile.commonError;
+    const risk = matchedProfile.retentionRisk || 'low';
+
+    block += `### LONGITUDINAL PROFILE FOR DETECTED TOPIC: "${matchedProfile.conceptNameEn || matchedConceptKey}"\n`;
+    block += `- Historical Mastery: ${masteryPct}% | Empirical Confidence: ${confPct}%\n`;
+    if (commonErr) {
+      block += `- Documented Stumbling Block: ${commonErr}\n`;
+    }
+    block += `- Response Latency Profile: ${String(latency).toUpperCase()} cognitive processing time\n`;
+    block += `- Empirically Proven Best Strategy: ${String(bestStrat).toUpperCase()}${secStrat ? ` (Secondary: ${String(secStrat).toUpperCase()})` : ''}\n`;
+    block += `- Retention Decay Risk: ${String(risk).toUpperCase()}\n`;
+
+    // PROACTIVE PEDAGOGICAL MANDATE
+    block += `\n### PROACTIVE PEDAGOGICAL MANDATE FOR THIS TOPIC (DO NOT WAIT FOR STUDENT TO FAIL):\n`;
+    block += `1. PRE-EMPT KNOWN STUMBLING BLOCKS: The student has a documented history of difficulty with "${matchedProfile.conceptNameEn || matchedConceptKey}"${commonErr ? ` (specifically: ${commonErr})` : ''} and requires ${latency} latency processing.\n`;
+    if (bestStrat === 'worked_example') {
+      block += `2. OPEN WITH WORKED EXAMPLE & PHYSICAL ANALOGY: Proactively open your explanation with a concrete, numbered step-by-step worked example grounded in a physical real-world metaphor BEFORE presenting technical formulas or abstract code syntax.\n`;
+    } else if (bestStrat === 'analogies') {
+      block += `2. OPEN WITH INTUITIVE PHYSICAL ANALOGY: Ground the intuition immediately with a physical analogy before technical details.\n`;
+    } else if (bestStrat === 'socratic') {
+      block += `2. INTELLECTUAL CHALLENGE: Guide with thought-provoking questions and connect to real-world distributed architectures.\n`;
+    } else {
+      block += `2. SCAFFOLD PROACTIVELY: Break down the initial presentation into bite-sized micro-steps with clear visual milestones.\n`;
+    }
+    block += `3. FORMATIVE MICRO-CHECK: Conclude with a 1-click micro-check block (:::micro-check\\n{...}\\n:::) to verify immediate understanding.\n`;
+  }
+
+  // Include ready-to-inject proactive directives if available
+  const directives = Array.isArray(plm.proactiveRemediationDirectives) ? plm.proactiveRemediationDirectives : [];
+  if (directives.length > 0) {
+    block += `\n### ACTIVE PROACTIVE DIRECTIVES:\n`;
+    for (const d of directives) {
+      block += `- ${d}\n`;
+    }
+  }
+
+  return block;
+}
+
 /** The adaptive system prompt. Kept in step with the client's previous inline version. */
 export function buildPersona(
   profile: Profile,
   otherThreads = '',
-  explicitStudentState?: StudentStatePayload
+  explicitStudentState?: StudentStatePayload,
+  userMessage = ''
 ): string {
   const a11y = profile.accessibilityMode;
   const memoryBlock = formatStudentMemoryBlock(profile.memory);
   const spatialBlock = formatSpatialMemoriesBlock(profile.spatialMemories);
   const effectiveState = explicitStudentState || profile.studentState;
   const stateBlock = formatStudentStateBlock(effectiveState);
+  const plmBlock = formatPersonalLearningModelBlock(effectiveState?.personalLearningModel, userMessage);
   const effectivePedagogy = effectiveState?.activePedagogy || profile.preferredPedagogyStyle;
   const cognitiveBlock = formatCognitiveCalibration(effectivePedagogy, profile.level);
   return `You are Cognify, an adaptive AI mentor and personal assistant. Give the most correct, useful answer calibrated to THIS user.
@@ -412,7 +498,7 @@ export function buildPersona(
 }
 :::
 - Ensure valid JSON inside :::micro-check. Do not include micro-checks for quick small-talk, greeting, or minor follow-ups.
-${a11y === 'Visual' ? '\n## ACCESSIBILITY\n- USER IS BLIND. Describing an image/photo is a practical task, not a creative one:\n  1) Say FIRST if anything looks like a hazard (traffic, stairs, obstacles, fire, spills, sharp/hot objects) — one short sentence, before anything else.\n  2) Read any visible text VERBATIM (labels, signs, medicine dosage, prices, dates) — do not paraphrase or summarize numbers/instructions.\n  3) Then describe what matters practically: what/who is there, roughly where (left/right/near/far, or clock position like "at 2 o\'clock"), not colors or aesthetics unless asked.\n  4) Be concise — a few short sentences, not a paragraph. No flowery/"vivid" language, no markdown, no tables — this is read aloud by TTS. CRITICAL: Never output markdown asterisks (**), bullet points, or section headings (do NOT write "**Hazards:** None" or "**Visible Text:** None" or "**Scene Description:**"). Speak directly in natural conversational prose.' : ''}${a11y === 'Vocal-Deaf' || a11y === 'Sign-Only' ? '\n## ACCESSIBILITY\n- User is deaf. Short, visual sentences.' : ''}${a11y === 'Speech' ? '\n## ACCESSIBILITY\n- Output is read aloud by TTS: smooth speakable prose, no tables, no markdown noise.' : ''}${memoryBlock}${spatialBlock}${stateBlock}${cognitiveBlock}
+${a11y === 'Visual' ? '\n## ACCESSIBILITY\n- USER IS BLIND. Describing an image/photo is a practical task, not a creative one:\n  1) Say FIRST if anything looks like a hazard (traffic, stairs, obstacles, fire, spills, sharp/hot objects) — one short sentence, before anything else.\n  2) Read any visible text VERBATIM (labels, signs, medicine dosage, prices, dates) — do not paraphrase or summarize numbers/instructions.\n  3) Then describe what matters practically: what/who is there, roughly where (left/right/near/far, or clock position like "at 2 o\'clock"), not colors or aesthetics unless asked.\n  4) Be concise — a few short sentences, not a paragraph. No flowery/"vivid" language, no markdown, no tables — this is read aloud by TTS. CRITICAL: Never output markdown asterisks (**), bullet points, or section headings (do NOT write "**Hazards:** None" or "**Visible Text:** None" or "**Scene Description:**"). Speak directly in natural conversational prose.' : ''}${a11y === 'Vocal-Deaf' || a11y === 'Sign-Only' ? '\n## ACCESSIBILITY\n- User is deaf. Short, visual sentences.' : ''}${a11y === 'Speech' ? '\n## ACCESSIBILITY\n- Output is read aloud by TTS: smooth speakable prose, no tables, no markdown noise.' : ''}${memoryBlock}${spatialBlock}${stateBlock}${plmBlock}${cognitiveBlock}
 ${otherThreads ? `\n## THREAD MEMORY\nSummaries of the user's other threads. Use them ONLY if explicitly asked about past conversations.\n${otherThreads}\n` : ''}`;
 }
 

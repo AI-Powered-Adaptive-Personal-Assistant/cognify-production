@@ -23,8 +23,22 @@ import {
   isGuestUser,
   getLearningEventHistory,
 } from './learningEvents';
+import {
+  PersonalLearningModel,
+  ConceptLearningProfile,
+  ResponseLatencyProfile,
+  RetentionRiskLevel,
+  buildPersonalLearningModel,
+} from './personalLearningModel';
 
 export { isGuestUser };
+export type {
+  RetentionSchedule,
+  PersonalLearningModel,
+  ConceptLearningProfile,
+  ResponseLatencyProfile,
+  RetentionRiskLevel,
+};
 
 /**
  * Canonical Firestore document path for student state.
@@ -64,6 +78,7 @@ export interface ConceptMasteryRecord {
   mistakeTypes: string[];
   strategyOutcomes?: Partial<Record<PedagogyStrategy, StrategyOutcomeMetrics>>;
   bestObservedStrategy?: PedagogyStrategy;
+  avgResponseTimeMs?: number;
 }
 
 export type StruggleSignalType = 'high_response_latency' | 'repeated_errors' | 'prerequisite_gap' | 'frequent_hints';
@@ -98,6 +113,7 @@ export interface StudentState {
   retentionSchedules: Record<string, RetentionSchedule>;
   activeInterventions: Record<string, InterventionDirective>;
   interventionHistory?: InterventionOutcomeRecord[];
+  personalLearningModel?: PersonalLearningModel;
   totalExercisesCompleted: number;
   lastActiveTimestamp: number;
 }
@@ -105,7 +121,7 @@ export interface StudentState {
 const STORAGE_PREFIX = 'cognify_student_state_';
 
 export function createInitialStudentState(uid: string, level?: string): StudentState {
-  return {
+  const initial: StudentState = {
     uid,
     cognitiveStage: resolveCognitiveStage(level),
     activePedagogy: 'scaffolded',
@@ -130,6 +146,8 @@ export function createInitialStudentState(uid: string, level?: string): StudentS
     totalExercisesCompleted: 0,
     lastActiveTimestamp: Date.now(),
   };
+  initial.personalLearningModel = buildPersonalLearningModel(initial);
+  return initial;
 }
 
 export class StudentStateManager {
@@ -165,6 +183,13 @@ export class StudentStateManager {
 
   public getState(): StudentState {
     return { ...this.state };
+  }
+
+  public getPersonalLearningModel(): PersonalLearningModel {
+    if (!this.state.personalLearningModel) {
+      this.state.personalLearningModel = buildPersonalLearningModel(this.state);
+    }
+    return { ...this.state.personalLearningModel };
   }
 
   /** True once authoritative state has loaded (instant for guests, post-hydration for auth users) */
@@ -393,6 +418,11 @@ export class StudentStateManager {
 
     record.accuracy = Math.round((record.correct / record.attempts) * 100) / 100;
 
+    if (typeof responseTimeMs === 'number' && responseTimeMs > 0) {
+      const prevTotal = (record.avgResponseTimeMs || responseTimeMs) * (record.attempts - 1);
+      record.avgResponseTimeMs = Math.round((prevTotal + responseTimeMs) / record.attempts);
+    }
+
     // Outcome tracking: evaluate effectiveness of any active intervention on this concept
     if (activeInt && activeInt.strategy) {
       const strat = activeInt.strategy as PedagogyStrategy;
@@ -497,6 +527,9 @@ export class StudentStateManager {
     // Track touched concepts and mark pending writes
     this.pendingConcepts.add(cleanConcept);
     this.hasPendingWrites = true;
+
+    // Consolidate longitudinal Personal Learning Model
+    this.state.personalLearningModel = buildPersonalLearningModel(this.state, now);
 
     // Instant local cache save
     this.saveToLocalCache();
@@ -617,6 +650,7 @@ export class StudentStateManager {
         totalExercisesCompleted: s.totalExercisesCompleted,
         lastActiveTimestamp: s.lastActiveTimestamp,
         interventionHistory: s.interventionHistory || [],
+        personalLearningModel: s.personalLearningModel,
       };
 
       for (const cid of touched) {
@@ -882,5 +916,6 @@ export function projectEventsToState(
     }
   }
 
+  state.personalLearningModel = buildPersonalLearningModel(state);
   return state;
 }

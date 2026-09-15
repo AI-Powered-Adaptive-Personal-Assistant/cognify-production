@@ -36,14 +36,15 @@ npm run build
 
 ## 2. Automated Test Suite Architecture [VERIFIED]
 
-Cognify enforces a mandatory quality gate consisting of **666 automated assertions across 4 suites with 100% pass rate requirement**:
+Cognify enforces a mandatory quality gate consisting of **762 automated assertions across 5 suites with 100% pass rate requirement**:
 
 ```mermaid
 graph TD
-    TestRunner["npm test"] --> S1["1. Core System Suites [1-35]<br>(tests/runAllTests.ts)<br>477 Assertions"]
+    TestRunner["npm test"] --> S1["1. Core System Suites [1-36]<br>(tests/runAllTests.ts)<br>525 Assertions"]
     TestRunner --> S2["2. Golden Adaptive Scenario<br>(tests/goldenAdaptiveScenario.ts)<br>62 Assertions"]
     TestRunner --> S3["3. Real Adaptive API Suite<br>(tests/realAdaptiveApiVerification.ts)<br>73 Assertions"]
-    TestRunner --> S4["4. End-to-End User Lifecycle<br>(tests/e2eFullUserCycle.ts)<br>54 Assertions"]
+    TestRunner --> S4["4. Personal Learning Model (PLM)<br>(tests/personalLearningModelVerification.ts)<br>48 Assertions"]
+    TestRunner --> S5["5. End-to-End User Lifecycle<br>(tests/e2eFullUserCycle.ts)<br>54 Assertions"]
 
     S1 --> S1A["Math: GPA, Hake Gain, SM-2 Retention"]
     S1 --> S1B["State: Event Sourcing, Dirty Tracking, Dot-Path"]
@@ -57,17 +58,22 @@ graph TD
     S3 --> S3B["Deterministic Router (Strain >= 0.8)"]
     S3 --> S3C["Outcome Tracking & Strategy Win-Rate"]
 
-    S4 --> S4A["New Student Onboarding & Session Auth"]
-    S4 --> S4B["Rate Limiter & QualityGuard Repair"]
-    S4 --> S4C["PWA Manifest & Zero-Knowledge Spec"]
+    S4 --> S4A["PLM Consolidation & Strategy Ranking"]
+    S4 --> S4B["Latency & Retention Risk Profiles"]
+    S4 --> S4C["Proactive Directives & Topic Isolation"]
+
+    S5 --> S5A["New Student Onboarding & Session Auth"]
+    S5 --> S5B["Rate Limiter & QualityGuard Repair"]
+    S5 --> S5C["PWA Manifest & Zero-Knowledge Spec"]
 ```
 
 ### Passing Summary:
-- **Suite 1 to 35 (`runAllTests.ts`)**: 477 passed, 0 failed.
+- **Suite 1 to 36 (`runAllTests.ts`)**: 525 passed, 0 failed.
 - **Golden Adaptive Scenario (`goldenAdaptiveScenario.ts`)**: 62 passed, 0 failed.
 - **Real Adaptive API Suite (`realAdaptiveApiVerification.ts`)**: 73 passed, 0 failed.
+- **Personal Learning Model Suite (`personalLearningModelVerification.ts`)**: 48 passed, 0 failed.
 - **End-to-End Full User Cycle (`e2eFullUserCycle.ts`)**: 54 passed, 0 failed.
-- **Total Assertions**: **666 passing / 0 failing (100% Success Rate)**.
+- **Total Assertions**: **762 passing / 0 failing (100% Success Rate)**.
 
 ---
 
